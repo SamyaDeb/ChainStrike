@@ -1,0 +1,37 @@
+{
+  "network": "testnet",
+  "timestamp": "2026-04-05 01:50:22",
+  "contracts": {
+    "oracle": {
+      "app_id": 758290477,
+      "address": "TMZRURTJSWM75JGU2Y2GKSZLN3BS77NAF37IYJZKF3ZSSHZTA54RLXAIJI"
+    },
+    "strike_token": {
+      "app_id": 758290478,
+      "address": "MAQZ4P6RJRD7Q5IUTWDSS3MTLYWXI2MAE5TATQE6AUQGMUIVIYTGJDFCGY"
+    },
+    "staking": {
+      "app_id": 758290479,
+      "address": "GJ5PH5ZVLS2Z4GRXRHHPSZIGZ7MBE6HZRKSODMLLMSQSJMFUHKZ33PPWNA"
+    },
+    "options_pool": {
+      "app_id": 758290646,
+      "address": "FDQVVTLT2MYINU4KVVFQJZ5EEJEPD2NX45LT5NPAFSEEIHVJVC5XFZQVY4"
+    },
+    "options_market": {
+      "app_id": 758290651,
+      "address": "I2LI5ALGTBZTKZDR5UK233RMQPNMEX34G5QWVQC5ITBR2VUONPDKP3CCWY"
+    },
+    "perps_pool": {
+      "app_id": 758290663,
+      "address": "X3B72DK3ONFRX3BSWBZ2WWSQIKMFDB6OBEATRLSMP4NG2C63WD7KH424QY"
+    },
+    "perps_market": {
+      "app_id": 758290831,
+      "address": "ZCKRMQT5TCR5P3FVYTZWZMVUCMDDT6V6WOCGPZQEJVJ34G2QFI432EC34I"
+    }
+  },
+  "assets": {
+    "perps_lp": 758290870
+  }
+}
