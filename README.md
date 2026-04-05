@@ -1,5 +1,7 @@
 # ChainStrike
 
+<img width="1470" height="837" alt="Screenshot 2026-04-05 at 10 41 26 AM" src="https://github.com/user-attachments/assets/0adb0f8d-db3e-4eec-afa0-c2f4db2cc01e" />
+
 **Decentralized Derivatives Trading Platform on Algorand**
 
 ChainStrike is a cutting-edge DeFi platform enabling perpetual futures and options trading on the Algorand blockchain. Built with Algorand Python (Puya) smart contracts and a modern Next.js frontend.
