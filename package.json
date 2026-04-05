@@ -1,0 +1,30 @@
+{
+  "name": "chainstrike",
+  "version": "1.0.0",
+  "description": "Decentralized Options & Perpetuals Exchange on Algorand",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build",
+    "lint": "pnpm --filter frontend lint",
+    "contracts:build": "cd contracts && algokit compile",
+    "contracts:test": "cd contracts && pytest",
+    "contracts:deploy": "cd contracts && python scripts/deploy.py",
+    "keepers:dev": "pnpm --filter keepers dev",
+    "keepers:start": "pnpm --filter keepers start"
+  },
+  "keywords": [
+    "algorand",
+    "defi",
+    "options",
+    "perpetuals",
+    "derivatives",
+    "blockchain"
+  ],
+  "author": "ChainStrike Team",
+  "license": "MIT"
+}
