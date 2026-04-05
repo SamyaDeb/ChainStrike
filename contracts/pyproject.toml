@@ -1,0 +1,41 @@
+[project]
+name = "chainstrike-contracts"
+version = "0.1.0"
+description = "ChainStrike Algorand Smart Contracts"
+authors = [{ name = "ChainStrike Team" }]
+requires-python = ">=3.12"
+dependencies = [
+    "algokit-utils>=3.1.0",
+    "algorand-python>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "algokit-client-generator>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.7.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # Line too long
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.algokit]
+project_name = "chainstrike-contracts"

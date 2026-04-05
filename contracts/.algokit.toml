@@ -1,0 +1,24 @@
+[project]
+type = "contract"
+name = "chainstrike-contracts"
+
+[project.deploy]
+command = "python -m scripts.deploy"
+environment_secrets = [
+    "DEPLOYER_MNEMONIC",
+]
+
+[project.run.build]
+command = "algokit compile py ."
+description = "Compile all contracts"
+
+[project.run.test]
+command = "pytest tests/ -v"
+description = "Run contract tests"
+
+[project.run.deploy-testnet]
+command = "python -m scripts.deploy"
+description = "Deploy contracts to TestNet"
+environment_secrets = [
+    "DEPLOYER_MNEMONIC",
+]
