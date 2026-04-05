@@ -1,0 +1,31 @@
+{
+  "name": "Oracle",
+  "desc": "Multi-source price oracle for ALGO/USD",
+  "methods": [
+    {
+      "name": "update_price",
+      "args": [
+        { "name": "binance_price", "type": "uint64" },
+        { "name": "coingecko_price", "type": "uint64" },
+        { "name": "vestige_price", "type": "uint64" }
+      ],
+      "returns": {
+        "type": "(uint64,uint64,uint64,uint64)",
+        "desc": "PriceData struct (price, timestamp, source_count, confidence)"
+      }
+    },
+    {
+      "name": "get_price",
+      "args": [],
+      "returns": {
+        "type": "(uint64,uint64,uint64,uint64)",
+        "desc": "Current PriceData"
+      }
+    },
+    {
+      "name": "is_price_stale",
+      "args": [],
+      "returns": { "type": "bool" }
+    }
+  ]
+}
