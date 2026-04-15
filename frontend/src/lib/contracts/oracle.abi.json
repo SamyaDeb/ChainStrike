@@ -4,27 +4,96 @@
   "methods": [
     {
       "name": "update_price",
+      "desc": "Update oracle price from keeper bot with prices from multiple sources",
       "args": [
-        { "name": "binance_price", "type": "uint64" },
-        { "name": "coingecko_price", "type": "uint64" },
-        { "name": "vestige_price", "type": "uint64" }
+        { "name": "binance_price", "type": "uint64", "desc": "Binance price in microUSD" },
+        { "name": "coingecko_price", "type": "uint64", "desc": "CoinGecko price in microUSD" },
+        { "name": "vestige_price", "type": "uint64", "desc": "Vestige on-chain DEX price in microUSD" }
       ],
       "returns": {
         "type": "(uint64,uint64,uint64,uint64)",
-        "desc": "PriceData struct (price, timestamp, source_count, confidence)"
+        "desc": "PriceData struct: (price, timestamp, source_count, confidence)"
       }
     },
     {
       "name": "get_price",
+      "desc": "Get the current validated price (reverts if stale)",
       "args": [],
       "returns": {
         "type": "(uint64,uint64,uint64,uint64)",
-        "desc": "Current PriceData"
+        "desc": "PriceData struct: (price, timestamp, source_count, confidence)"
+      }
+    },
+    {
+      "name": "get_price_unsafe",
+      "desc": "Get current price without staleness check",
+      "args": [],
+      "returns": {
+        "type": "uint64",
+        "desc": "Latest price in microUSD (may be stale)"
       }
     },
     {
       "name": "is_price_stale",
+      "desc": "Check whether the current price is stale (alias for !is_price_fresh(max_staleness))",
       "args": [],
+      "returns": { "type": "bool", "desc": "True if price is stale" }
+    },
+    {
+      "name": "is_price_fresh",
+      "desc": "Check if the latest price update is within a given age",
+      "args": [
+        { "name": "max_age", "type": "uint64", "desc": "Maximum allowed age in seconds" }
+      ],
+      "returns": { "type": "bool", "desc": "True if price is fresh" }
+    },
+    {
+      "name": "get_source_prices",
+      "desc": "Get the individual prices from each data source",
+      "args": [],
+      "returns": {
+        "type": "(uint64,uint64,uint64)[]",
+        "desc": "Array of SourcePrice structs: (price, timestamp, source_id)"
+      }
+    },
+    {
+      "name": "set_max_staleness",
+      "desc": "Admin: set the maximum staleness threshold in seconds",
+      "args": [
+        { "name": "seconds", "type": "uint64", "desc": "Staleness threshold in seconds" }
+      ],
+      "returns": { "type": "bool" }
+    },
+    {
+      "name": "set_max_deviation",
+      "desc": "Admin: set the maximum allowed price deviation between sources in basis points",
+      "args": [
+        { "name": "basis_points", "type": "uint64", "desc": "Max deviation in basis points (e.g. 500 = 5%)" }
+      ],
+      "returns": { "type": "bool" }
+    },
+    {
+      "name": "set_min_sources",
+      "desc": "Admin: set the minimum number of valid price sources required",
+      "args": [
+        { "name": "count", "type": "uint64", "desc": "Minimum source count (1-3)" }
+      ],
+      "returns": { "type": "bool" }
+    },
+    {
+      "name": "transfer_admin",
+      "desc": "Admin: transfer admin role to a new address",
+      "args": [
+        { "name": "new_admin", "type": "address", "desc": "New admin address" }
+      ],
+      "returns": { "type": "bool" }
+    },
+    {
+      "name": "emergency_set_price",
+      "desc": "Admin: manually set price in emergencies (bypasses multi-source validation)",
+      "args": [
+        { "name": "price", "type": "uint64", "desc": "Emergency price in microUSD" }
+      ],
       "returns": { "type": "bool" }
     }
   ]

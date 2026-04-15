@@ -34,6 +34,7 @@ export interface Position {
   pnl: number;
   pnlPercent: number;
   liquidationPrice?: number;
+  leverage?: number;
   expiryDate?: Date;
   expiry?: number; // Expiry timestamp in UNIX seconds
   strike?: number;
@@ -203,6 +204,7 @@ function clearPendingPositions(
 /**
  * Decode an arg to a string. Handles both Uint8Array (from SDK) and base64 string (from REST).
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function decodeArgToString(arg: Uint8Array | string): string {
   try {
     if (arg instanceof Uint8Array) {
@@ -294,6 +296,7 @@ function bytesToHex(bytes: Uint8Array): string {
 const ABI_UINT64_RETURN_PREFIX = new Uint8Array([0x15, 0x1f, 0x7c, 0x75]);
 const OPTION_BOX_PREFIX = new TextEncoder().encode("opt_");
 const CREATE_OPTION_SELECTORS = new Set(["b7704681", "df6df6fd"]);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SETTLE_OPTION_SELECTOR = "2a17b262";
 const OPTION_INFO_TUPLE_TYPE = algosdk.ABIType.from(
   "(uint64,bool,uint64,uint64,uint64,uint64,uint64,address,uint64,uint64,bool,bool)",
@@ -345,6 +348,7 @@ type DecodedOptionBox = {
   isSettled: boolean;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function decodeOptionBox(
   boxName: Uint8Array,
   boxValue: Uint8Array,
@@ -394,6 +398,7 @@ function decodeOptionBox(
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function calculateOptionPayoutMicroAlgos(params: {
   isCall: boolean;
   strikePriceMicroUsd: number;
@@ -425,6 +430,7 @@ function calculateOptionPayoutMicroAlgos(params: {
 /**
  * Compare two group IDs that may be Uint8Array or string
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function groupsMatch(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a instanceof Uint8Array && b instanceof Uint8Array) {
@@ -979,6 +985,7 @@ export async function getPerpPositions(
           pnl,
           pnlPercent,
           liquidationPrice: liquidationPriceUsd,
+          leverage: leverageX,
           timestamp: decoded.openTime * 1000,
         });
 
@@ -1109,7 +1116,8 @@ async function getLPPositionFromBox(
       currentValue,
       entryTime,
     };
-  } catch (error) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     // Box doesn't exist or error reading - user has no position
     return null;
   }
@@ -1264,6 +1272,7 @@ export async function getPerpsPoolStats(
       ((globalState.total_trading_fees as number) || 0) / 1_000_000;
     const totalPayouts =
       ((globalState.total_payouts as number) || 0) / 1_000_000;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const maxUtilization =
       ((globalState.max_utilization as number) || 8000) / 100; // basis points to %
     const lpCount = (globalState.lp_count as number) || 0;
@@ -1429,7 +1438,9 @@ export async function getStakingStats(
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getOptionChain(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   asset: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   currentPrice: number,
 ): Promise<OptionData[]> {
   const contracts = getContracts();

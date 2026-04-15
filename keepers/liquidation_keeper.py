@@ -49,8 +49,9 @@ MIN_MARGIN_RATIO = 500  # 5% minimum margin
 # Load deployed addresses
 DEPLOYED_PATH = Path(__file__).parent.parent / "contracts" / "deployed_addresses.json"
 
-# Default deployer mnemonic (TestNet only)
-DEFAULT_MNEMONIC = "crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss"
+# Mnemonic MUST be provided via the KEEPER_MNEMONIC environment variable.
+# Do NOT hardcode mnemonics in source code.
+DEFAULT_MNEMONIC = ""  # Empty — set KEEPER_MNEMONIC env var before running
 
 
 class Position:
@@ -223,15 +224,20 @@ class LiquidationKeeper:
             sp = self.algod_client.suggested_params()
 
             # Build liquidation call
-            # Method signature: liquidate(address)
-            method_selector = bytes.fromhex("b1c5a5e2")  # Example selector
-            address_bytes = encoding.decode_address(position.address)
+            # Method signature: liquidate(uint64)bool
+            # Selector = first 4 bytes of SHA-512/256("liquidate(uint64)bool")
+            method_selector = bytes.fromhex("692ab0e6")
+            position_id_bytes = (
+                position.position_id.to_bytes(8, "big")
+                if hasattr(position, "position_id")
+                else encoding.decode_address(position.address)
+            )
 
             txn = ApplicationNoOpTxn(
                 sender=self.address,
                 sp=sp,
                 index=self.perps_market_app_id,
-                app_args=[method_selector, address_bytes],
+                app_args=[method_selector, position_id_bytes],
                 accounts=[position.address],
             )
 
@@ -377,6 +383,11 @@ async def main():
     # Get configuration from environment or use defaults
     keeper_mnemonic = os.getenv("KEEPER_MNEMONIC", DEFAULT_MNEMONIC)
     perps_market_id, oracle_id = load_contract_ids()
+
+    if not keeper_mnemonic:
+        print("[ERROR] KEEPER_MNEMONIC environment variable is not set.")
+        print("  Export it before running: export KEEPER_MNEMONIC='word1 word2 ...'")
+        sys.exit(1)
 
     perps_market_id = int(os.getenv("PERPS_MARKET_APP_ID", str(perps_market_id)))
     oracle_id = int(os.getenv("ORACLE_APP_ID", str(oracle_id)))

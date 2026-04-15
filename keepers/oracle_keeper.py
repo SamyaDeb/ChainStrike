@@ -58,8 +58,9 @@ VESTIGE_URL = "https://free-api.vestige.fi/asset/0/price"
 # Load deployed addresses
 DEPLOYED_PATH = Path(__file__).parent.parent / "contracts" / "deployed_addresses.json"
 
-# Default deployer mnemonic (TestNet only)
-DEFAULT_MNEMONIC = "crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss"
+# Mnemonic MUST be provided via the KEEPER_MNEMONIC environment variable.
+# Do NOT hardcode mnemonics in source code.
+DEFAULT_MNEMONIC = ""  # Empty — set KEEPER_MNEMONIC env var before running
 
 
 class OracleKeeper:
@@ -338,6 +339,11 @@ async def main():
     # Get configuration from environment or use defaults
     keeper_mnemonic = os.getenv("KEEPER_MNEMONIC", DEFAULT_MNEMONIC)
     oracle_app_id = int(os.getenv("ORACLE_APP_ID", str(load_oracle_app_id())))
+
+    if not keeper_mnemonic:
+        print("[ERROR] KEEPER_MNEMONIC environment variable is not set.")
+        print("  Export it before running: export KEEPER_MNEMONIC='word1 word2 ...'")
+        sys.exit(1)
 
     if oracle_app_id == 0:
         print("[WARN] ORACLE_APP_ID not set, running in simulation mode")

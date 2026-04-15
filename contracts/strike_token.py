@@ -19,6 +19,8 @@ Distribution:
 from algopy import (
     ARC4Contract,
     Asset,
+    Bytes,
+    BoxMap,
     Global,
     Txn,
     UInt64,
@@ -83,6 +85,8 @@ class StrikeToken(ARC4Contract):
 
         # Vesting tracking (using boxes for schedules)
         self.vesting_count = UInt64(0)
+        # BoxMap: beneficiary address bytes → VestingSchedule
+        self.vesting_schedules = BoxMap(Bytes, VestingSchedule, key_prefix=b"vst_")
 
     @abimethod()
     def create_token(self) -> arc4.UInt64:
@@ -212,13 +216,14 @@ class StrikeToken(ARC4Contract):
         """
         assert Txn.sender == self.admin, "Only admin"
         assert not self.is_paused, "Contract paused"
+        assert amount.native > 0, "Amount must be positive"
+        assert vesting_days.native > 0, "Vesting period must be positive"
 
         # Convert days to seconds
         cliff_seconds = cliff_days.native * 86400
         vesting_seconds = vesting_days.native * 86400
 
-        # Store vesting schedule in box storage
-        # Box key: beneficiary address bytes
+        # Store vesting schedule in box storage keyed by beneficiary address
         schedule = VestingSchedule(
             total_amount=amount,
             released_amount=arc4.UInt64(0),
@@ -228,8 +233,7 @@ class StrikeToken(ARC4Contract):
             is_revocable=revocable,
         )
 
-        # Note: In production, use BoxMap for vesting schedules
-        # For simplicity, we'll track count and emit events
+        self.vesting_schedules[beneficiary.bytes] = schedule.copy()
         self.vesting_count += 1
 
         return Bool(True)
@@ -249,11 +253,48 @@ class StrikeToken(ARC4Contract):
         assert not self.is_paused, "Contract paused"
         assert self.asset_id > 0, "Token not created"
 
-        # In production, fetch vesting schedule from box storage
-        # Calculate vested amount based on time elapsed
-        # For now, return 0 as placeholder
+        # Fetch vesting schedule from box storage
+        beneficiary_key = beneficiary.bytes
+        assert beneficiary_key in self.vesting_schedules, "No vesting schedule found"
+        schedule = self.vesting_schedules[beneficiary_key].copy()
 
-        return arc4.UInt64(0)
+        # Calculate total vested amount up to now
+        total_vested = self._calculate_vested(
+            schedule.total_amount.native,
+            schedule.start_time.native,
+            schedule.cliff_duration.native,
+            schedule.vesting_duration.native,
+        )
+
+        # Amount available to release = vested - already released
+        already_released = schedule.released_amount.native
+        if total_vested <= already_released:
+            return arc4.UInt64(0)
+
+        releasable = total_vested - already_released
+
+        # Update released amount
+        new_released = already_released + releasable
+        self.vesting_schedules[beneficiary_key] = VestingSchedule(
+            total_amount=schedule.total_amount,
+            released_amount=arc4.UInt64(new_released),
+            start_time=schedule.start_time,
+            cliff_duration=schedule.cliff_duration,
+            vesting_duration=schedule.vesting_duration,
+            is_revocable=schedule.is_revocable,
+        )
+
+        # Transfer STRIKE tokens to beneficiary
+        itxn.AssetTransfer(
+            xfer_asset=self.asset_id,
+            asset_receiver=beneficiary.native,
+            asset_amount=releasable,
+            fee=Global.min_txn_fee,
+        ).submit()
+
+        self.minted_supply += releasable
+
+        return arc4.UInt64(releasable)
 
     @abimethod()
     def revoke_vesting(self, beneficiary: Address) -> Bool:
@@ -305,7 +346,12 @@ class StrikeToken(ARC4Contract):
         Returns:
             Vesting schedule details
         """
-        # In production, fetch from box storage
+        # Fetch from box storage
+        beneficiary_key = beneficiary.bytes
+        if beneficiary_key in self.vesting_schedules:
+            return self.vesting_schedules[beneficiary_key].copy()
+
+        # Return empty schedule if not found
         return VestingSchedule(
             total_amount=arc4.UInt64(0),
             released_amount=arc4.UInt64(0),
@@ -354,6 +400,28 @@ class StrikeToken(ARC4Contract):
         return arc4.UInt64(vested)
 
     # ========== Admin Functions ==========
+
+    @subroutine
+    def _calculate_vested(
+        self,
+        total: UInt64,
+        start: UInt64,
+        cliff: UInt64,
+        duration: UInt64,
+    ) -> UInt64:
+        """Internal helper: calculate vested amount given schedule parameters."""
+        current_time = Global.latest_timestamp
+
+        cliff_end = start + cliff
+        if current_time < cliff_end:
+            return UInt64(0)
+
+        vesting_end = start + duration
+        if current_time >= vesting_end:
+            return total
+
+        elapsed = current_time - start
+        return (total * elapsed) // duration
 
     @abimethod()
     def set_minter(self, new_minter: Address) -> Bool:

@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Explicitly set the workspace root to silence the multi-lockfile warning
+  outputFileTracingRoot: new URL('..', import.meta.url).pathname,
+
   // Transpile wallet-related packages for proper ESM/CJS handling
   transpilePackages: [
     '@txnlab/use-wallet-react',

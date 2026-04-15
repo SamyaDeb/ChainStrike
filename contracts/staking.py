@@ -368,19 +368,65 @@ class Staking(ARC4Contract):
     @abimethod()
     def compound(self) -> Bool:
         """
-        Compound rewards by converting to STRIKE and restaking.
-        (Simplified - in production would swap ALGO for STRIKE)
+        Compound pending ALGO rewards back into the staking pool.
+        Instead of withdrawing rewards, they are added to the staker's
+        staked balance, increasing future reward earnings.
 
         Returns:
             Success status
         """
         assert not self.is_paused, "Contract paused"
 
-        # Claim rewards first
-        # Swap ALGO for STRIKE via DEX
-        # Restake the STRIKE
+        # Update global rewards
+        self._update_rewards()
 
-        # Placeholder - actual implementation needs DEX integration
+        stake_key = Txn.sender.bytes
+        assert stake_key in self.stakes, "No stake found"
+        stake_info = self.stakes[stake_key].copy()
+        assert stake_info.staked_amount.native > 0, "Nothing staked"
+
+        # Calculate pending ALGO rewards
+        pending = UInt64(0)
+        if self.acc_reward_per_share > 0:
+            total_reward = (stake_info.staked_amount.native * self.acc_reward_per_share) // self.precision
+            if total_reward > stake_info.rewards_debt.native:
+                pending = total_reward - stake_info.rewards_debt.native
+
+        pending += stake_info.pending_rewards.native
+
+        if pending == 0:
+            return Bool(True)
+
+        # Ensure the contract has enough balance
+        assert pending <= self.algo_rewards_balance, "Insufficient reward balance"
+
+        # Deduct from rewards pool
+        self.algo_rewards_balance -= pending
+        self.total_rewards_distributed += pending
+
+        # Add compounded rewards to staked amount
+        new_staked = stake_info.staked_amount.native + pending
+        self.total_staked += pending
+
+        # Recalculate weighted stake with existing multiplier
+        old_weighted = (stake_info.staked_amount.native * stake_info.lock_multiplier.native) // 10000
+        new_weighted = (new_staked * stake_info.lock_multiplier.native) // 10000
+        if self.total_weighted_stake >= old_weighted:
+            self.total_weighted_stake = self.total_weighted_stake - old_weighted + new_weighted
+
+        # Update new rewards debt
+        new_rewards_debt = (new_staked * self.acc_reward_per_share) // self.precision
+
+        # Persist updated stake
+        self.stakes[stake_key] = StakeInfo(
+            staked_amount=arc4.UInt64(new_staked),
+            lock_until=stake_info.lock_until,
+            lock_multiplier=stake_info.lock_multiplier,
+            rewards_debt=arc4.UInt64(new_rewards_debt),
+            pending_rewards=arc4.UInt64(0),
+            stake_time=stake_info.stake_time,
+        )
+
         return Bool(True)
 
     @abimethod()
@@ -396,14 +442,39 @@ class Staking(ARC4Contract):
         """
         assert not self.is_paused, "Contract paused"
 
-        # Validate new lock period is longer
+        # Fetch current stake from box
+        stake_key = Txn.sender.bytes
+        assert stake_key in self.stakes, "No stake found"
+        stake_info = self.stakes[stake_key].copy()
+        assert stake_info.staked_amount.native > 0, "Nothing staked"
+
+        # Calculate new lock expiry
+        new_lock_until = Global.latest_timestamp + new_lock_days.native * 86400
+
+        # New lock must extend beyond current lock
+        assert new_lock_until > stake_info.lock_until.native, "Must extend beyond current lock"
+
+        # New multiplier from the new lock period
         new_multiplier = self._get_lock_multiplier(new_lock_days.native)
 
-        # In production:
-        # 1. Fetch current stake from box
-        # 2. Verify new lock is longer
-        # 3. Update lock_until and multiplier
-        # 4. Recalculate weighted stake
+        # New multiplier must be >= current (can't downgrade)
+        assert new_multiplier >= stake_info.lock_multiplier.native, "Cannot reduce multiplier"
+
+        # Update global weighted stake
+        old_weighted = (stake_info.staked_amount.native * stake_info.lock_multiplier.native) // 10000
+        new_weighted = (stake_info.staked_amount.native * new_multiplier) // 10000
+        if self.total_weighted_stake >= old_weighted:
+            self.total_weighted_stake = self.total_weighted_stake - old_weighted + new_weighted
+
+        # Persist updated stake with new lock
+        self.stakes[stake_key] = StakeInfo(
+            staked_amount=stake_info.staked_amount,
+            lock_until=arc4.UInt64(new_lock_until),
+            lock_multiplier=arc4.UInt64(new_multiplier),
+            rewards_debt=stake_info.rewards_debt,
+            pending_rewards=stake_info.pending_rewards,
+            stake_time=stake_info.stake_time,
+        )
 
         return Bool(True)
 

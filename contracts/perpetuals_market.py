@@ -451,12 +451,31 @@ class PerpetualsMarket(ARC4Contract):
         assert gtxn.PaymentTransaction(0).amount >= amount.native, "Insufficient payment"
         assert gtxn.PaymentTransaction(0).receiver == Global.current_application_address, "Wrong receiver"
 
-        # In production:
-        # 1. Verify caller is position owner
-        # 2. Fetch position from box
-        # 3. Add margin to collateral
-        # 4. Recalculate liquidation price
-        # 5. Update position in box
+        # Fetch position from box storage
+        assert position_id in self.positions, "Position not found"
+        position = self.positions[position_id].copy()
+
+        # Verify caller is position owner
+        assert Txn.sender == position.trader.native, "Only position owner"
+
+        # Position must be open
+        assert position.is_open.native, "Position not open"
+
+        # Add margin to collateral
+        new_collateral = position.collateral.native + amount.native
+        position.collateral = arc4.UInt64(new_collateral)
+
+        # Recalculate liquidation price with increased collateral
+        new_liq_price = self._calculate_liquidation_price(
+            position.is_long.native,
+            position.entry_price.native,
+            new_collateral,
+            position.size.native,
+        )
+        position.liquidation_price = arc4.UInt64(new_liq_price)
+
+        # Update position in box storage
+        self.positions[position_id] = position.copy()
 
         # Transfer margin to pool
         itxn.Payment(
@@ -481,13 +500,43 @@ class PerpetualsMarket(ARC4Contract):
         """
         assert not self.is_paused, "Market paused"
 
-        # In production:
-        # 1. Verify caller is position owner
-        # 2. Fetch position from box
-        # 3. Calculate new margin after removal
-        # 4. Verify new margin meets maintenance requirement
-        # 5. Recalculate liquidation price
-        # 6. Transfer margin back to trader
+        # Fetch position from box storage
+        assert position_id in self.positions, "Position not found"
+        position = self.positions[position_id].copy()
+
+        # Verify caller is position owner
+        assert Txn.sender == position.trader.native, "Only position owner"
+
+        # Position must be open
+        assert position.is_open.native, "Position not open"
+
+        # Ensure enough collateral remains after removal
+        assert position.collateral.native > amount.native, "Insufficient collateral"
+        new_collateral = position.collateral.native - amount.native
+
+        # Verify the new collateral still meets maintenance margin requirement
+        maint_required = (position.size.native * self.maintenance_margin) // 10000
+        assert new_collateral >= maint_required, "Would fall below maintenance margin"
+
+        # Update collateral and recalculate liquidation price
+        position.collateral = arc4.UInt64(new_collateral)
+        new_liq_price = self._calculate_liquidation_price(
+            position.is_long.native,
+            position.entry_price.native,
+            new_collateral,
+            position.size.native,
+        )
+        position.liquidation_price = arc4.UInt64(new_liq_price)
+
+        # Persist updated position
+        self.positions[position_id] = position.copy()
+
+        # Transfer margin back to trader via pool withdrawal
+        itxn.Payment(
+            receiver=Txn.sender,
+            amount=amount.native,
+            fee=Global.min_txn_fee,
+        ).submit()
 
         return Bool(True)
 
@@ -622,14 +671,77 @@ class PerpetualsMarket(ARC4Contract):
         Returns:
             Success status
         """
-        # In production:
-        # 1. Fetch position from box
-        # 2. Get funding rate from pool
-        # 3. Calculate time since last funding
-        # 4. Calculate funding payment
-        # 5. Update position margin (add or subtract)
-        # 6. Update accumulated_funding and last_funding_time
-        # 7. Update liquidation price if needed
+        # Fetch position from box storage
+        assert position_id in self.positions, "Position not found"
+        position = self.positions[position_id].copy()
+
+        # Position must be open
+        assert position.is_open.native, "Position not open"
+
+        # Get funding rate and direction from pool via app_global_get_ex
+        funding_rate, rate_exists = op.AppGlobal.get_ex_uint64(self.perps_pool_app_id, b"current_funding_rate")
+        if not rate_exists or funding_rate == 0:
+            # Nothing to apply
+            return Bool(True)
+
+        funding_is_pos_raw, direction_exists = op.AppGlobal.get_ex_uint64(
+            self.perps_pool_app_id, b"funding_rate_is_positive"
+        )
+        longs_pay = direction_exists and funding_is_pos_raw > 0
+
+        # Calculate time elapsed since last funding (in seconds)
+        current_time = Global.latest_timestamp
+        elapsed = current_time - position.last_funding_time.native
+
+        if elapsed == 0:
+            return Bool(True)
+
+        # Funding rate is in basis points per hour; convert elapsed to hours
+        # funding_payment = size * funding_rate * elapsed / (3600 * 10000)
+        funding_payment = (position.size.native * funding_rate * elapsed) // (3600 * 10000)
+
+        if funding_payment == 0:
+            # Update timestamp even if no payment
+            position.last_funding_time = arc4.UInt64(current_time)
+            self.positions[position_id] = position.copy()
+            return Bool(True)
+
+        # Determine if this position pays or receives funding
+        # Longs pay if longs_pay == True; shorts pay if longs_pay == False
+        position_pays = (position.is_long.native and longs_pay) or (not position.is_long.native and not longs_pay)
+
+        old_accumulated = position.accumulated_funding.native
+
+        if position_pays:
+            # Deduct funding from collateral
+            if position.collateral.native > funding_payment:
+                new_collateral = position.collateral.native - funding_payment
+            else:
+                # Position is fully consumed by funding — cap at 1
+                new_collateral = UInt64(1)
+            position.collateral = arc4.UInt64(new_collateral)
+            position.accumulated_funding = arc4.UInt64(old_accumulated + funding_payment)
+
+            # Recalculate liquidation price
+            new_liq = self._calculate_liquidation_price(
+                position.is_long.native,
+                position.entry_price.native,
+                new_collateral,
+                position.size.native,
+            )
+            position.liquidation_price = arc4.UInt64(new_liq)
+        else:
+            # Add funding to collateral (position receives payment)
+            new_collateral = position.collateral.native + funding_payment
+            position.collateral = arc4.UInt64(new_collateral)
+            # Accumulated funding tracks net paid — stays the same when receiving
+            position.accumulated_funding = arc4.UInt64(old_accumulated if old_accumulated >= funding_payment else 0)
+
+        # Update last funding timestamp
+        position.last_funding_time = arc4.UInt64(current_time)
+
+        # Persist updated position
+        self.positions[position_id] = position.copy()
 
         return Bool(True)
 

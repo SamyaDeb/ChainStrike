@@ -49,8 +49,9 @@ DEFAULT_CHECK_INTERVAL = (
 # Load deployed addresses
 DEPLOYED_PATH = Path(__file__).parent.parent / "contracts" / "deployed_addresses.json"
 
-# Default deployer mnemonic (TestNet only)
-DEFAULT_MNEMONIC = "crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss"
+# Mnemonic MUST be provided via the KEEPER_MNEMONIC environment variable.
+# Do NOT hardcode mnemonics in source code.
+DEFAULT_MNEMONIC = ""  # Empty — set KEEPER_MNEMONIC env var before running
 
 
 class Option:
@@ -162,23 +163,84 @@ class SettlementKeeper:
             return int(time.time())
 
     def get_expired_options(self, current_time: int) -> List[Option]:
-        """Get all expired but unsettled options."""
+        """Get all expired but unsettled options by reading box storage."""
         options = []
 
         try:
-            # In production, this would query the contract's box storage
-            # or use an indexer to find all option records
-
-            # For now, read from global state
             state = self.read_global_state(self.options_market_app_id)
+            option_count = int(state.get("option_count", 0))
 
-            # Check for option count and iterate
-            option_count = state.get("option_count", 0)
+            if option_count == 0:
+                return options
 
-            for i in range(option_count):
-                # In production, read each option from box storage
-                # This is a simplified example
-                pass
+            # Box key format: "opt_" + option_id (uint64 big-endian, 8 bytes)
+            BOX_PREFIX = b"opt_"
+
+            for option_id in range(1, option_count + 1):
+                try:
+                    box_name_bytes = BOX_PREFIX + option_id.to_bytes(8, "big")
+                    box_name_b64 = base64.b64encode(box_name_bytes).decode("utf-8")
+
+                    box_response = self.algod_client.application_box_by_name(
+                        self.options_market_app_id, box_name_bytes
+                    )
+                    box_value = base64.b64decode(box_response.get("value", ""))
+
+                    if len(box_value) < 88:
+                        continue
+
+                    # Decode ABI tuple: (uint64,bool,uint64,uint64,uint64,uint64,uint64,address,uint64,uint64,bool,bool)
+                    # Offsets (packed ABI encoding):
+                    #   0: option_id        uint64 (8 bytes)
+                    #   8: is_call          bool   (1 byte)
+                    #   9: strike_price     uint64 (8 bytes)
+                    #  17: expiry           uint64 (8 bytes)
+                    #  25: size             uint64 (8 bytes)
+                    #  33: premium          uint64 (8 bytes)
+                    #  41: collateral       uint64 (8 bytes)
+                    #  49: buyer/holder     address (32 bytes)
+                    #  81: creation_time    uint64 (8 bytes)
+                    #  89: settlement_price uint64 (8 bytes)
+                    #  97: is_exercised     bool   (1 byte)
+                    #  98: is_settled       bool   (1 byte)
+                    is_call = bool(box_value[8])
+                    strike_price = int.from_bytes(box_value[9:17], "big")
+                    expiry = int.from_bytes(box_value[17:25], "big")
+                    size = int.from_bytes(box_value[25:33], "big")
+                    premium = int.from_bytes(box_value[33:41], "big")
+                    holder_bytes = box_value[49:81]
+                    is_settled = bool(box_value[98]) if len(box_value) > 98 else False
+
+                    # Convert holder address from 32-byte public key
+                    try:
+                        holder_addr = encoding.encode_address(holder_bytes)
+                    except Exception:
+                        holder_addr = ""
+
+                    option = Option(
+                        option_id,
+                        {
+                            "holder": holder_addr,
+                            "strike_price": strike_price,
+                            "expiry": expiry,
+                            "size": size,
+                            "premium": premium,
+                            "is_call": is_call,
+                            "is_settled": is_settled,
+                        },
+                    )
+
+                    if option.is_expired(current_time) and not option.is_settled:
+                        options.append(option)
+                        self.options_checked += 1
+
+                except Exception as box_err:
+                    # Box may not exist for this ID — skip silently
+                    if "box not found" not in str(box_err).lower():
+                        print(
+                            f"  [WARN] Error reading option box {option_id}: {box_err}"
+                        )
+                    continue
 
         except Exception as e:
             print(f"  [ERR] Error fetching options: {e}")
@@ -217,8 +279,9 @@ class SettlementKeeper:
             sp = self.algod_client.suggested_params()
 
             # Build settlement call
-            # Method signature: settle_option(uint64)
-            method_selector = bytes.fromhex("a3d2c5e1")  # Example selector
+            # Method signature: settle_option(uint64)uint64
+            # Selector = first 4 bytes of SHA-512/256("settle_option(uint64)uint64")
+            method_selector = bytes.fromhex("2a17b262")
             option_id_bytes = option.option_id.to_bytes(8, "big")
 
             txn = ApplicationNoOpTxn(
@@ -376,6 +439,11 @@ async def main():
     # Get configuration from environment or use defaults
     keeper_mnemonic = os.getenv("KEEPER_MNEMONIC", DEFAULT_MNEMONIC)
     options_market_id, oracle_id = load_contract_ids()
+
+    if not keeper_mnemonic:
+        print("[ERROR] KEEPER_MNEMONIC environment variable is not set.")
+        print("  Export it before running: export KEEPER_MNEMONIC='word1 word2 ...'")
+        sys.exit(1)
 
     options_market_id = int(os.getenv("OPTIONS_MARKET_APP_ID", str(options_market_id)))
     oracle_id = int(os.getenv("ORACLE_APP_ID", str(oracle_id)))

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, TrendingUp, Shield } from "lucide-react";
-import { AlgorandLogo, AlgoCoinBadge } from "@/components/shared/algorand-logo";
+import { AlgoCoinBadge } from "@/components/shared/algorand-logo";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 

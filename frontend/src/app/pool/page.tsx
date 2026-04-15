@@ -11,7 +11,6 @@ import {
   Wallet, 
   ArrowDownUp, 
   Info, 
-  PieChart,
   Percent,
   AlertCircle,
   Activity,

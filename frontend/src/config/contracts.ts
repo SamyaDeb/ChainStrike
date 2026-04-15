@@ -6,6 +6,7 @@
  */
 
 import algosdk from "algosdk";
+import { DEPLOYED_CONTRACTS } from "./deployed-contracts";
 
 // ============================================================================
 // Contract App IDs
@@ -15,43 +16,43 @@ export const CONTRACTS = {
   testnet: {
     // Core Infrastructure
     oracle: {
-      appId: 758290477,
-      address: algosdk.getApplicationAddress(758290477),
+      appId: DEPLOYED_CONTRACTS.oracle,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.oracle),
       description: "Multi-source price oracle (Binance, CoinGecko, Vestige)",
     },
     strikeToken: {
-      appId: 758290478,
-      address: algosdk.getApplicationAddress(758290478),
+      appId: DEPLOYED_CONTRACTS.strikeToken,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.strikeToken),
       description: "STRIKE governance token contract",
     },
     staking: {
-      appId: 758290479,
-      address: algosdk.getApplicationAddress(758290479),
+      appId: DEPLOYED_CONTRACTS.staking,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.staking),
       description: "STRIKE staking and rewards distribution",
     },
 
     // Options Trading
     optionsPool: {
-      appId: 758290646,
-      address: algosdk.getApplicationAddress(758290646),
+      appId: DEPLOYED_CONTRACTS.optionsPool,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.optionsPool),
       description: "Options liquidity pool (LPs earn from premiums)",
     },
     optionsMarket: {
-      appId: 758290651,
-      address: algosdk.getApplicationAddress(758290651),
+      appId: DEPLOYED_CONTRACTS.optionsMarket,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.optionsMarket),
       description:
         "Options trading (calls/puts with 1-minute to 30-day expiry)",
     },
 
     // Perpetuals Trading
     perpsPool: {
-      appId: 758290663,
-      address: algosdk.getApplicationAddress(758290663),
+      appId: DEPLOYED_CONTRACTS.perpsPool,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.perpsPool),
       description: "Perpetuals liquidity pool (counterparty to all positions)",
     },
     perpsMarket: {
-      appId: 758290831,
-      address: algosdk.getApplicationAddress(758290831),
+      appId: DEPLOYED_CONTRACTS.perpsMarket,
+      address: algosdk.getApplicationAddress(DEPLOYED_CONTRACTS.perpsMarket),
       description:
         "Perpetuals trading (up to 20x leverage with dynamic fee routing)",
     },

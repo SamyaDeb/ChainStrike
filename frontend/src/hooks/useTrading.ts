@@ -63,6 +63,7 @@ function decodeGlobalStateKey(key: Uint8Array | string): string {
   return String(key);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getGlobalStateUint(
   appInfo: unknown,
   targetKey: string,
@@ -125,6 +126,7 @@ function sqrtBigInt(value: bigint): bigint {
   return z;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function calculateContractPremiumMicroAlgos(params: {
   isCall: boolean;
   spotPriceMicroUsd: bigint;
@@ -248,6 +250,7 @@ function encodeUint64(value: bigint): Uint8Array {
   return bytes;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getOptionBoxName(optionId: bigint): Uint8Array {
   const prefix = new TextEncoder().encode("opt_");
   const idBytes = encodeUint64(optionId);
@@ -260,6 +263,7 @@ function decodeBase64Bytes(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function decodeFirstAbiUint64Log(
   logs: Array<string | Uint8Array> | undefined,
 ): bigint | null {
@@ -312,247 +316,81 @@ export function useOptionsTrading() {
         return { success: false, error: "Wallet not connected" };
       }
 
-      const sender = activeAccount.address.toString();
-
       setIsLoading(true);
       setError(null);
 
       try {
         const contracts = CONTRACTS.testnet;
-        const algodClient = getAlgodClient();
+        const sender = activeAccount.address.toString();
+        const algodClientInst = getAlgodClient();
 
-        // Get next option ID from contract global state
-        const appInfo = await algodClient
-          .getApplicationByID(contracts.optionsMarket.appId)
-          .do();
-        const nextOptionIdBigInt = getGlobalStateUint(
-          appInfo,
-          "next_option_id",
-        );
-        if (nextOptionIdBigInt === null) {
-          return {
-            success: false,
-            error: "Failed to read next_option_id from contract",
-          };
-        }
-        const nextOptionId = nextOptionIdBigInt;
-
-        // Get current price from oracle
-        const oracleInfo = await algodClient
-          .getApplicationByID(contracts.oracle.appId)
-          .do();
-        const currentPriceMicroUsd = getGlobalStateUint(
-          oracleInfo,
-          "current_price",
-        );
-        if (
-          currentPriceMicroUsd === null ||
-          currentPriceMicroUsd <= BigInt(0)
-        ) {
-          return {
-            success: false,
-            error: "Oracle price not available. Contact administrator.",
-          };
-        }
-
-        const isCall = params.optionType === "call";
-        const sizeMicroAlgos = BigInt(params.quantity * 1_000_000); // Convert contracts to microALGO
-        const strikePriceMicroUsd = BigInt(params.strike);
-        const nowTimestamp = Math.floor(Date.now() / 1000);
-
-        // Get IV from contract global state
-        const ivBigInt = getGlobalStateUint(appInfo, "default_iv");
-        const impliedVolatilityBp = ivBigInt ?? BigInt(8000); // 80% default
-
-        // Calculate premium using same logic as contract
-        const tradingFeeBp = BigInt(30); // 0.3% - match contract
-        const premiumMicroAlgos = calculateContractPremiumMicroAlgos({
-          isCall,
-          spotPriceMicroUsd: currentPriceMicroUsd, // Use real oracle price
-          strikePriceMicroUsd,
-          expiryTimestamp: BigInt(params.expiryTimestamp),
-          sizeMicroAlgos,
-          currentTimestamp: BigInt(nowTimestamp),
-          impliedVolatilityBp,
-        });
-
-        // Debug logging
-        console.log("[buyOption] Premium calculation:", {
-          spotPriceMicroUsd: currentPriceMicroUsd.toString(),
-          strikePriceMicroUsd: strikePriceMicroUsd.toString(),
-          sizeMicroAlgos: sizeMicroAlgos.toString(),
-          premiumMicroAlgos: premiumMicroAlgos.toString(),
-          premiumAlgo: (Number(premiumMicroAlgos) / 1_000_000).toFixed(6),
-          impliedVolatilityBp: impliedVolatilityBp.toString(),
-        });
-
-        if (premiumMicroAlgos <= BigInt(0)) {
-          return {
-            success: false,
-            error:
-              "Failed to compute premium for this option. Adjust strike/expiry and retry.",
-          };
-        }
-
-        const tradingFeeMicroAlgos =
-          (premiumMicroAlgos * tradingFeeBp) / BigInt(10_000);
-        const boxMbrMicroAlgos = BigInt(100_000);
-        const priceSafetyBuffer = BigInt(1_000);
-        const paymentAmountMicroAlgos =
-          premiumMicroAlgos +
-          tradingFeeMicroAlgos +
-          boxMbrMicroAlgos +
-          priceSafetyBuffer;
-
-        // Pre-flight balance check for options
-        const accountInfo = await algodClient.accountInformation(sender).do();
-        const balance = Number(accountInfo.amount);
-        const minBalance = Number(accountInfo.minBalance);
-        const availableBalance = balance - minBalance;
-        const txFees = 6_000; // ~0.006 ALGO for transaction fees
-        const requiredMicroAlgos = Number(paymentAmountMicroAlgos) + txFees;
-
-        if (availableBalance < requiredMicroAlgos) {
-          const availableAlgo = (availableBalance / 1_000_000).toFixed(4);
-          const requiredAlgo = (requiredMicroAlgos / 1_000_000).toFixed(4);
-          return {
-            success: false,
-            error: `Insufficient available balance. You have ${availableAlgo} ALGO available but need ${requiredAlgo} ALGO (premium + fees). Your account has a high minimum balance requirement.`,
-          };
-        }
-
-        const suggestedParams = await algodClient.getTransactionParams().do();
-        const paymentParams = {
+        const suggestedParams = await algodClientInst.getTransactionParams().do();
+        const txParams = {
           ...suggestedParams,
           flatFee: true,
-          fee: 2000,
-        };
-        const appCallParams = {
-          ...suggestedParams,
-          flatFee: true,
-          fee: 4000,
+          fee: 5000,
         };
 
-        // Transaction 0: Payment for premium + fee to the options market
-        // IMPORTANT: Payment MUST be at index 0 (contract checks gtxn.PaymentTransaction(0))
-        const paymentTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-          sender,
-          receiver: contracts.optionsMarket.address.toString(),
-          amount: paymentAmountMicroAlgos,
-          suggestedParams: paymentParams,
-          note: new TextEncoder().encode("option_premium"),
-        });
-
-        // Transaction 1: ABI method call for create_option
-        // Using proper ABI encoding with ABIMethod
-        const createOptionMethod = new algosdk.ABIMethod({
-          name: "create_option",
+        // ABI method: buy_option(uint64,uint64,uint64,bool)uint64
+        // args: strike_price, expiry, quantity, is_call
+        const buyMethod = new algosdk.ABIMethod({
+          name: "buy_option",
           args: [
-            { type: "bool", name: "is_call" },
             { type: "uint64", name: "strike_price" },
             { type: "uint64", name: "expiry" },
-            { type: "uint64", name: "size" },
+            { type: "uint64", name: "quantity" },
+            { type: "bool", name: "is_call" },
           ],
           returns: { type: "uint64" },
         });
 
-        const boolType = algosdk.ABIType.from("bool");
         const uint64Type = algosdk.ABIType.from("uint64");
+        const boolType = algosdk.ABIType.from("bool");
         const appArgs = [
-          createOptionMethod.getSelector(),
-          boolType.encode(isCall),
-          uint64Type.encode(strikePriceMicroUsd),
+          buyMethod.getSelector(),
+          uint64Type.encode(BigInt(params.strike)),
           uint64Type.encode(BigInt(params.expiryTimestamp)),
-          uint64Type.encode(sizeMicroAlgos),
+          uint64Type.encode(BigInt(params.quantity)),
+          boolType.encode(params.optionType === "call"),
         ];
 
-        // Create app call with proper boxes for storing the option
+        // Premium payment as a separate payment txn (grouped)
+        const premiumMicroAlgos = Math.round(params.premium * 1_000_000);
+        const paymentTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+          sender,
+          receiver: contracts.optionsPool.address.toString(),
+          amount: premiumMicroAlgos,
+          suggestedParams: txParams,
+          note: new TextEncoder().encode("ChainStrike:BuyOptionPremium"),
+        });
+
         const appCallTxn = algosdk.makeApplicationNoOpTxnFromObject({
           sender,
           appIndex: contracts.optionsMarket.appId,
           appArgs,
-          foreignApps: [
-            contracts.oracle.appId,
-            contracts.optionsPool.appId,
-            contracts.staking.appId,
-          ],
-          suggestedParams: appCallParams,
-          note: new TextEncoder().encode("ChainStrike:CreateOption"),
-          boxes: [
-            {
-              appIndex: contracts.optionsMarket.appId,
-              name: getOptionBoxName(nextOptionId),
-            },
-          ],
+          accounts: [contracts.optionsPool.address.toString()],
+          foreignApps: [contracts.optionsPool.appId, contracts.oracle.appId],
+          suggestedParams: txParams,
+          note: new TextEncoder().encode("ChainStrike:BuyOption"),
         });
 
-        // Group the transactions
-        const txns = [paymentTxn, appCallTxn];
-        const groupedTxns = algosdk.assignGroupID(txns);
+        algosdk.assignGroupID([paymentTxn, appCallTxn]);
 
-        // Sign with wallet
-        const encodedTxns = groupedTxns.map((txn) =>
-          algosdk.encodeUnsignedTransaction(txn),
-        );
+        const encodedTxns = [
+          algosdk.encodeUnsignedTransaction(paymentTxn),
+          algosdk.encodeUnsignedTransaction(appCallTxn),
+        ];
         const signedTxns = await signTransactions(encodedTxns);
-
-        // Send transactions
         const result = await sendSignedTransactions(signedTxns);
 
-        let optionId: number | undefined;
-        try {
-          const pendingInfo = (await algodClient
-            .pendingTransactionInformation(result.txId)
-            .do()) as {
-            logs?: Array<string | Uint8Array>;
-          };
-          const optionIdBigInt = decodeFirstAbiUint64Log(pendingInfo.logs);
-          if (optionIdBigInt !== null) {
-            optionId = Number(optionIdBigInt);
-          }
-        } catch {
-          // Ignore log parsing failure; indexer will populate confirmed position shortly
-        }
-
-        // Save position immediately for instant portfolio update
-        savePendingPosition({
-          id: optionId ? `opt-${optionId}` : result.txId,
-          txId: result.txId,
-          type: "option",
-          asset: "ALGO",
-          side: "long",
-          size: params.quantity / 1_000_000, // Convert back to ALGO
-          entryPrice:
-            Number(premiumMicroAlgos) /
-            1_000_000 /
-            (params.quantity / 1_000_000),
-          currentPrice: params.strike / 1_000_000, // Convert microUSD to USD
-          pnl: 0,
-          pnlPercent: 0,
-          strike: params.strike / 1_000_000, // Convert to USD
-          optionType: params.optionType,
-          expiryDate: new Date(params.expiryTimestamp * 1000),
-          premium: Number(premiumMicroAlgos) / 1_000_000,
-          quantity: params.quantity / 1_000_000,
-          optionId,
-          isSettled: false,
-          status: "active",
-          timestamp: Date.now(),
-        });
-
-        // Clear cache to force refresh
         if (typeof window !== "undefined") {
           localStorage.removeItem("chainstrike_option_positions");
         }
 
-        return {
-          success: true,
-          txId: result.txId,
-          optionId,
-        };
+        return { success: true, txId: result.txId };
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : "Transaction failed";
+          err instanceof Error ? err.message : "Buy option transaction failed";
         setError(errorMessage);
         return { success: false, error: errorMessage };
       } finally {
@@ -568,24 +406,16 @@ export function useOptionsTrading() {
         return { success: false, error: "Wallet not connected" };
       }
 
-      if (!Number.isFinite(optionId) || optionId <= 0) {
-        return { success: false, error: "Invalid option ID" };
-      }
-
       setIsLoading(true);
       setError(null);
 
       try {
         const contracts = CONTRACTS.testnet;
-        const algodClient = getAlgodClient();
         const sender = activeAccount.address.toString();
+        const algodClientInst = getAlgodClient();
 
-        const suggestedParams = await algodClient.getTransactionParams().do();
-        const settleParams = {
-          ...suggestedParams,
-          flatFee: true,
-          fee: 5000,
-        };
+        const suggestedParams = await algodClientInst.getTransactionParams().do();
+        const settleParams = { ...suggestedParams, flatFee: true, fee: 5000 };
 
         const settleMethod = new algosdk.ABIMethod({
           name: "settle_option",
@@ -598,6 +428,11 @@ export function useOptionsTrading() {
           settleMethod.getSelector(),
           uint64Type.encode(BigInt(optionId)),
         ];
+
+        const optBoxPrefix = new TextEncoder().encode("opt_");
+        const optIdBytes = new Uint8Array(8);
+        new DataView(optIdBytes.buffer).setBigUint64(0, BigInt(optionId), false);
+        const optBoxName = new Uint8Array([...optBoxPrefix, ...optIdBytes]);
 
         const appCallTxn = algosdk.makeApplicationNoOpTxnFromObject({
           sender,
@@ -615,12 +450,7 @@ export function useOptionsTrading() {
           ],
           suggestedParams: settleParams,
           note: new TextEncoder().encode("ChainStrike:SettleOption"),
-          boxes: [
-            {
-              appIndex: contracts.optionsMarket.appId,
-              name: getOptionBoxName(BigInt(optionId)),
-            },
-          ],
+          boxes: [{ appIndex: contracts.optionsMarket.appId, name: optBoxName }],
         });
 
         const encodedTxn = algosdk.encodeUnsignedTransaction(appCallTxn);
@@ -629,28 +459,29 @@ export function useOptionsTrading() {
 
         let settlementPayout: number | undefined;
         try {
-          const pendingInfo = (await algodClient
+          const pendingInfo = (await algodClientInst
             .pendingTransactionInformation(result.txId)
-            .do()) as {
-            logs?: Array<string | Uint8Array>;
-          };
-          const payoutMicroAlgos = decodeFirstAbiUint64Log(pendingInfo.logs);
-          if (payoutMicroAlgos !== null) {
-            settlementPayout = Number(payoutMicroAlgos) / 1_000_000;
+            .do()) as { logs?: Array<string | Uint8Array> };
+          const raw = pendingInfo.logs?.[0];
+          if (raw) {
+            const bytes =
+              typeof raw === "string"
+                ? Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
+                : raw;
+            if (bytes.length >= 12) {
+              const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+              settlementPayout = Number(view.getBigUint64(4, false)) / 1_000_000;
+            }
           }
         } catch {
-          // Ignore payout parsing failures; UI can recompute from on-chain position state
+          // Ignore payout parsing failures
         }
 
         if (typeof window !== "undefined") {
           localStorage.removeItem("chainstrike_option_positions");
         }
 
-        return {
-          success: true,
-          txId: result.txId,
-          settlementPayout,
-        };
+        return { success: true, txId: result.txId, settlementPayout };
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Settlement transaction failed";
@@ -886,7 +717,6 @@ export function usePerpsTrading() {
 
       try {
         const contracts = CONTRACTS.testnet;
-        const algodClient = getAlgodClient();
         const sender = activeAccount.address.toString();
 
         // Parse position ID as number

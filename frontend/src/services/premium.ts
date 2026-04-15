@@ -41,7 +41,7 @@ const CACHE_TTL_MS = 5000; // 5 seconds cache
 const YEAR_SECONDS = BigInt(31_536_000);
 const PRECISION = BigInt(1_000_000);
 const ONE_ALGO = BigInt(1_000_000); // 1 ALGO in microALGO
-const DEBUG = true; // Enable debug logging
+const DEBUG = process.env.NODE_ENV !== 'production'; // Enable debug logging in non-production
 
 // Simple in-memory cache for premium quotes
 const premiumCache = new Map<string, { quote: PremiumQuote; timestamp: number }>();
