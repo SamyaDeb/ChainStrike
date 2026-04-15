@@ -1,0 +1,3257 @@
+#pragma version 11
+#pragma typetrack false
+
+// algopy.arc4.ARC4Contract.approval_program() -> uint64:
+main:
+    intcblock 0 1 8 10000 1000000 10000000
+    bytecblock 0x151f7c7580 "admin" 0x151f7c75 "total_long_oi" "total_short_oi" 0x00 "active_positions" "is_paused" "total_fees_collected" "operational_reserve" "perps_pool" "reserve_target" "maintenance_margin" "staking_contract" "perps_pool_app_id" "total_positions" "total_volume" "total_liquidations" "min_margin" "min_operational_balance" 0x706f735f "oracle" "oracle_app_id" "next_position_id" "min_leverage" "max_leverage" "open_fee" "close_fee" "leverage_precision" "min_position_size" "liquidation_fee" "liquidator_reward" "building_operational_share" "healthy_operational_share" "initial_margin" 0x0000000000000000
+    txn ApplicationID
+    bnz main_after_if_else@2
+    // perpetuals_market.py:103-104
+    // # Contract references
+    // self.oracle = Global.zero_address
+    bytec 21 // "oracle"
+    global ZeroAddress
+    app_global_put
+    // perpetuals_market.py:105
+    // self.perps_pool = Global.zero_address
+    bytec 10 // "perps_pool"
+    global ZeroAddress
+    app_global_put
+    // perpetuals_market.py:106
+    // self.staking_contract = Global.zero_address
+    bytec 13 // "staking_contract"
+    global ZeroAddress
+    app_global_put
+    // perpetuals_market.py:107
+    // self.oracle_app_id = UInt64(0)
+    bytec 22 // "oracle_app_id"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:108
+    // self.perps_pool_app_id = UInt64(0)
+    bytec 14 // "perps_pool_app_id"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:110-111
+    // # Position tracking
+    // self.next_position_id = UInt64(1)
+    bytec 23 // "next_position_id"
+    intc_1 // 1
+    app_global_put
+    // perpetuals_market.py:112
+    // self.total_positions = UInt64(0)
+    bytec 15 // "total_positions"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:113
+    // self.active_positions = UInt64(0)
+    bytec 6 // "active_positions"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:114
+    // self.total_long_oi = UInt64(0)
+    bytec_3 // "total_long_oi"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:115
+    // self.total_short_oi = UInt64(0)
+    bytec 4 // "total_short_oi"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:117-118
+    // # Volume and fees
+    // self.total_volume = UInt64(0)
+    bytec 16 // "total_volume"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:119
+    // self.total_fees_collected = UInt64(0)
+    bytec 8 // "total_fees_collected"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:120
+    // self.total_liquidations = UInt64(0)
+    bytec 17 // "total_liquidations"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:122-123
+    // # Configuration
+    // self.admin = Global.creator_address
+    bytec_1 // "admin"
+    global CreatorAddress
+    app_global_put
+    // perpetuals_market.py:124
+    // self.min_leverage = UInt64(100)  # 1x (scaled by 100)
+    bytec 24 // "min_leverage"
+    pushint 100
+    app_global_put
+    // perpetuals_market.py:125
+    // self.max_leverage = UInt64(2000)  # 20x
+    bytec 25 // "max_leverage"
+    pushint 2000
+    app_global_put
+    // perpetuals_market.py:126
+    // self.min_margin = UInt64(1_000_000)  # 1 ALGO minimum margin
+    bytec 18 // "min_margin"
+    intc 4 // 1000000
+    app_global_put
+    // perpetuals_market.py:127
+    // self.min_position_size = UInt64(10_000_000)  # 10 ALGO minimum size
+    bytec 29 // "min_position_size"
+    intc 5 // 10000000
+    app_global_put
+    // perpetuals_market.py:129-130
+    // # Fee structure (basis points)
+    // self.open_fee = UInt64(10)  # 0.1% opening fee
+    bytec 26 // "open_fee"
+    pushint 10
+    app_global_put
+    // perpetuals_market.py:131
+    // self.close_fee = UInt64(10)  # 0.1% closing fee
+    bytec 27 // "close_fee"
+    pushint 10
+    app_global_put
+    // perpetuals_market.py:132
+    // self.liquidation_fee = UInt64(100)  # 1% liquidation penalty
+    bytec 30 // "liquidation_fee"
+    pushint 100
+    app_global_put
+    // perpetuals_market.py:133
+    // self.liquidator_reward = UInt64(50)  # 0.5% to liquidator
+    bytec 31 // "liquidator_reward"
+    pushint 50
+    app_global_put
+    // perpetuals_market.py:135-136
+    // # Dynamic fee routing thresholds (Model 1)
+    // self.min_operational_balance = UInt64(1_000_000)  # 1 ALGO - critical threshold
+    bytec 19 // "min_operational_balance"
+    intc 4 // 1000000
+    app_global_put
+    // perpetuals_market.py:137
+    // self.reserve_target = UInt64(10_000_000)  # 10 ALGO - healthy threshold
+    bytec 11 // "reserve_target"
+    intc 5 // 10000000
+    app_global_put
+    // perpetuals_market.py:139-143
+    // # Fee split percentages (basis points) for different states
+    // # CRITICAL (<1 ALGO): 100% operational, 0% staking
+    // # BUILDING (1-10 ALGO): 50% operational, 50% staking
+    // # HEALTHY (>10 ALGO): 10% operational, 90% staking
+    // self.critical_operational_share = UInt64(10000)  # 100%
+    pushbytes "critical_operational_share"
+    intc_3 // 10000
+    app_global_put
+    // perpetuals_market.py:144
+    // self.building_operational_share = UInt64(5000)  # 50%
+    bytec 32 // "building_operational_share"
+    pushint 5000
+    app_global_put
+    // perpetuals_market.py:145
+    // self.healthy_operational_share = UInt64(1000)  # 10%
+    bytec 33 // "healthy_operational_share"
+    pushint 1000
+    app_global_put
+    // perpetuals_market.py:147-148
+    // # Operational reserve tracking
+    // self.operational_reserve = UInt64(0)
+    bytec 9 // "operational_reserve"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:150-151
+    // # Margin requirements (basis points)
+    // self.initial_margin = UInt64(500)  # 5% initial margin
+    bytec 34 // "initial_margin"
+    pushint 500
+    app_global_put
+    // perpetuals_market.py:152
+    // self.maintenance_margin = UInt64(250)  # 2.5% maintenance margin
+    bytec 12 // "maintenance_margin"
+    pushint 250
+    app_global_put
+    // perpetuals_market.py:154-155
+    // # State
+    // self.is_paused = False
+    bytec 7 // "is_paused"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:157-158
+    // # Precision
+    // self.price_precision = UInt64(1_000_000)  # 6 decimals
+    pushbytes "price_precision"
+    intc 4 // 1000000
+    app_global_put
+    // perpetuals_market.py:159
+    // self.leverage_precision = UInt64(100)  # 100 = 1x
+    bytec 28 // "leverage_precision"
+    pushint 100
+    app_global_put
+
+main_after_if_else@2:
+    // perpetuals_market.py:78
+    // class PerpetualsMarket(ARC4Contract):
+    txn NumAppArgs
+    bz main___algopy_default_create@33
+    txn OnCompletion
+    !
+    assert
+    txn ApplicationID
+    assert
+    pushbytess 0x4f7e2970 0x7029d97a 0x956e7e8f 0x6d403176 0xb894cd80 0x692ab0e6 0x35447539 0xef89e7b1 0xab522e77 0x3832517d 0x858b0d97 0x211d50ce 0xd27b37f5 0x933486c6 0xd5ca3378 0x829ff8e2 0x77657f92 0x0716359b 0x84f1aa6e 0xb7fbccd7 0x898c3059 0x01fdb342 0xb40bb560 0xf22ef43f // method "initialize(address,address,address,uint64,uint64)bool", method "open_position(bool,uint64,uint64)uint64", method "close_position(uint64)uint64", method "add_margin(uint64,uint64)bool", method "remove_margin(uint64,uint64)bool", method "liquidate(uint64)bool", method "apply_funding(uint64)bool", method "calculate_pnl(bool,uint64,uint64,uint64)(uint64,bool,uint64,bool,uint64,uint64)", method "is_liquidatable(bool,uint64,uint64,uint64,uint64)bool", method "get_position(uint64)(uint64,address,bool,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,bool)", method "get_market_stats()(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", method "get_current_price()uint64", method "calculate_required_margin(uint64,uint64)uint64", method "calculate_liquidation_price_view(bool,uint64,uint64,uint64)uint64", method "set_leverage_limits(uint64,uint64)bool", method "set_fees(uint64,uint64,uint64)bool", method "set_margin_requirements(uint64,uint64)bool", method "update_pool_app_id(uint64)bool", method "transfer_admin(address)bool", method "pause()bool", method "unpause()bool", method "get_operational_stats()(uint64,uint64,uint64)", method "get_current_fee_split()(uint64,uint64)", method "set_fee_routing_thresholds(uint64,uint64)bool"
+    txna ApplicationArgs 0
+    match initialize open_position close_position add_margin remove_margin liquidate apply_funding calculate_pnl is_liquidatable get_position get_market_stats get_current_price calculate_required_margin calculate_liquidation_price_view set_leverage_limits set_fees set_margin_requirements update_pool_app_id transfer_admin pause unpause get_operational_stats get_current_fee_split set_fee_routing_thresholds
+    err
+
+main___algopy_default_create@33:
+    txn OnCompletion
+    !
+    txn ApplicationID
+    !
+    &&
+    return
+
+
+// perpetuals_market.PerpetualsMarket.initialize[routing]() -> void:
+initialize:
+    // perpetuals_market.py:164
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    pushint 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 2
+    dup
+    len
+    pushint 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 3
+    dup
+    len
+    pushint 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 4
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 5
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:186
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:188
+    // self.oracle = oracle.native
+    bytec 21 // "oracle"
+    uncover 5
+    app_global_put
+    // perpetuals_market.py:189
+    // self.perps_pool = perps_pool.native
+    bytec 10 // "perps_pool"
+    uncover 4
+    app_global_put
+    // perpetuals_market.py:190
+    // self.staking_contract = staking_contract.native
+    bytec 13 // "staking_contract"
+    uncover 3
+    app_global_put
+    // perpetuals_market.py:191
+    // self.oracle_app_id = oracle_app.native
+    swap
+    btoi
+    bytec 22 // "oracle_app_id"
+    swap
+    app_global_put
+    // perpetuals_market.py:192
+    // self.perps_pool_app_id = perps_pool_app.native
+    btoi
+    bytec 14 // "perps_pool_app_id"
+    swap
+    app_global_put
+    // perpetuals_market.py:164
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.open_position[routing]() -> void:
+open_position:
+    // perpetuals_market.py:196
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_1 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:215
+    // assert not self.is_paused, "Market paused"
+    intc_0 // 0
+    bytec 7 // "is_paused"
+    app_global_get_ex
+    assert // check self.is_paused exists
+    !
+    assert // Market paused
+    // perpetuals_market.py:216
+    // assert self.oracle != Global.zero_address, "Not initialized"
+    intc_0 // 0
+    bytec 21 // "oracle"
+    app_global_get_ex
+    assert // check self.oracle exists
+    global ZeroAddress
+    !=
+    assert // Not initialized
+    // perpetuals_market.py:218-219
+    // # Validate leverage
+    // assert leverage.native >= self.min_leverage, "Leverage too low"
+    dup
+    btoi
+    intc_0 // 0
+    bytec 24 // "min_leverage"
+    app_global_get_ex
+    assert // check self.min_leverage exists
+    dig 1
+    <=
+    assert // Leverage too low
+    // perpetuals_market.py:220
+    // assert leverage.native <= self.max_leverage, "Leverage too high"
+    intc_0 // 0
+    bytec 25 // "max_leverage"
+    app_global_get_ex
+    assert // check self.max_leverage exists
+    dig 1
+    >=
+    assert // Leverage too high
+    // perpetuals_market.py:222-223
+    // # Validate size
+    // assert size.native >= self.min_position_size, "Position too small"
+    dig 2
+    btoi
+    dup
+    cover 5
+    intc_0 // 0
+    bytec 29 // "min_position_size"
+    app_global_get_ex
+    assert // check self.min_position_size exists
+    dig 1
+    <=
+    assert // Position too small
+    // perpetuals_market.py:225-227
+    // # Calculate required margin
+    // # margin = size / leverage
+    // required_margin = (size.native * self.leverage_precision) // leverage.native
+    intc_0 // 0
+    bytec 28 // "leverage_precision"
+    app_global_get_ex
+    assert // check self.leverage_precision exists
+    dig 1
+    *
+    uncover 2
+    /
+    // perpetuals_market.py:228
+    // assert required_margin >= self.min_margin, "Margin too low"
+    intc_0 // 0
+    bytec 18 // "min_margin"
+    app_global_get_ex
+    assert // check self.min_margin exists
+    dig 1
+    <=
+    assert // Margin too low
+    // perpetuals_market.py:230-231
+    // # Verify margin payment
+    // payment_amount = gtxn.PaymentTransaction(0).amount
+    intc_0 // 0
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    intc_0 // 0
+    gtxns Amount
+    // perpetuals_market.py:232
+    // assert payment_amount >= required_margin, "Insufficient margin"
+    dup
+    uncover 2
+    >=
+    assert // Insufficient margin
+    // perpetuals_market.py:233
+    // assert gtxn.PaymentTransaction(0).receiver == Global.current_application_address, "Wrong receiver"
+    intc_0 // 0
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // Wrong receiver
+    // perpetuals_market.py:235-236
+    // # Get current price
+    // current_price = self._get_oracle_price()
+    callsub _get_oracle_price
+    // perpetuals_market.py:237
+    // assert current_price > 0, "Invalid oracle price"
+    dup
+    assert // Invalid oracle price
+    // perpetuals_market.py:239-240
+    // # Calculate opening fee
+    // total_fee = (size.native * self.open_fee) // 10000
+    intc_0 // 0
+    bytec 26 // "open_fee"
+    app_global_get_ex
+    assert // check self.open_fee exists
+    dig 3
+    *
+    intc_3 // 10000
+    /
+    dup
+    cover 8
+    // perpetuals_market.py:241
+    // net_margin = payment_amount - total_fee
+    uncover 2
+    dig 1
+    -
+    dup
+    cover 2
+    cover 8
+    // perpetuals_market.py:243-244
+    // # Dynamic fee routing based on contract balance
+    // operational_fee, staking_fee = self._route_fee(total_fee)
+    callsub _route_fee
+    cover 8
+    cover 7
+    // perpetuals_market.py:248
+    // is_long.native,
+    dig 5
+    intc_0 // 0
+    getbit
+    // perpetuals_market.py:246-252
+    // # Calculate liquidation price
+    // liquidation_price = self._calculate_liquidation_price(
+    //     is_long.native,
+    //     current_price,
+    //     net_margin,
+    //     size.native,
+    // )
+    dup
+    dig 3
+    dig 3
+    dig 6
+    callsub _calculate_liquidation_price
+    // perpetuals_market.py:254-255
+    // # Create position
+    // position_id = self.next_position_id
+    intc_0 // 0
+    bytec 23 // "next_position_id"
+    app_global_get_ex
+    assert // check self.next_position_id exists
+    // perpetuals_market.py:256
+    // self.next_position_id += 1
+    dup
+    intc_1 // 1
+    +
+    bytec 23 // "next_position_id"
+    swap
+    app_global_put
+    // perpetuals_market.py:258-259
+    // # Store position in BoxMap
+    // position_key = arc4.UInt64(position_id)
+    itob
+    dup
+    cover 10
+    // perpetuals_market.py:262
+    // trader=Address(Txn.sender),
+    txn Sender
+    // perpetuals_market.py:265
+    // collateral=arc4.UInt64(net_margin),
+    uncover 4
+    itob
+    // perpetuals_market.py:267
+    // entry_price=arc4.UInt64(current_price),
+    uncover 5
+    itob
+    // perpetuals_market.py:268
+    // liquidation_price=arc4.UInt64(liquidation_price),
+    uncover 4
+    itob
+    // perpetuals_market.py:269
+    // last_funding_time=arc4.UInt64(Global.latest_timestamp),
+    global LatestTimestamp
+    itob
+    // perpetuals_market.py:271
+    // open_time=arc4.UInt64(Global.latest_timestamp),
+    global LatestTimestamp
+    itob
+    // perpetuals_market.py:260-273
+    // self.positions[position_key] = Position(
+    //     position_id=arc4.UInt64(position_id),
+    //     trader=Address(Txn.sender),
+    //     is_long=is_long,
+    //     size=size,
+    //     collateral=arc4.UInt64(net_margin),
+    //     leverage=leverage,
+    //     entry_price=arc4.UInt64(current_price),
+    //     liquidation_price=arc4.UInt64(liquidation_price),
+    //     last_funding_time=arc4.UInt64(Global.latest_timestamp),
+    //     accumulated_funding=arc4.UInt64(0),
+    //     open_time=arc4.UInt64(Global.latest_timestamp),
+    //     is_open=Bool(True),
+    // )
+    dig 6
+    uncover 6
+    concat
+    uncover 11
+    concat
+    uncover 10
+    concat
+    uncover 5
+    concat
+    uncover 8
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    // perpetuals_market.py:270
+    // accumulated_funding=arc4.UInt64(0),
+    bytec 35 // 0x0000000000000000
+    // perpetuals_market.py:260-273
+    // self.positions[position_key] = Position(
+    //     position_id=arc4.UInt64(position_id),
+    //     trader=Address(Txn.sender),
+    //     is_long=is_long,
+    //     size=size,
+    //     collateral=arc4.UInt64(net_margin),
+    //     leverage=leverage,
+    //     entry_price=arc4.UInt64(current_price),
+    //     liquidation_price=arc4.UInt64(liquidation_price),
+    //     last_funding_time=arc4.UInt64(Global.latest_timestamp),
+    //     accumulated_funding=arc4.UInt64(0),
+    //     open_time=arc4.UInt64(Global.latest_timestamp),
+    //     is_open=Bool(True),
+    // )
+    concat
+    swap
+    concat
+    // perpetuals_market.py:272
+    // is_open=Bool(True),
+    pushbytes 0x80
+    // perpetuals_market.py:260-273
+    // self.positions[position_key] = Position(
+    //     position_id=arc4.UInt64(position_id),
+    //     trader=Address(Txn.sender),
+    //     is_long=is_long,
+    //     size=size,
+    //     collateral=arc4.UInt64(net_margin),
+    //     leverage=leverage,
+    //     entry_price=arc4.UInt64(current_price),
+    //     liquidation_price=arc4.UInt64(liquidation_price),
+    //     last_funding_time=arc4.UInt64(Global.latest_timestamp),
+    //     accumulated_funding=arc4.UInt64(0),
+    //     open_time=arc4.UInt64(Global.latest_timestamp),
+    //     is_open=Bool(True),
+    // )
+    concat
+    // perpetuals_market.py:260
+    // self.positions[position_key] = Position(
+    bytec 20 // 0x706f735f
+    uncover 2
+    concat
+    // perpetuals_market.py:260-273
+    // self.positions[position_key] = Position(
+    //     position_id=arc4.UInt64(position_id),
+    //     trader=Address(Txn.sender),
+    //     is_long=is_long,
+    //     size=size,
+    //     collateral=arc4.UInt64(net_margin),
+    //     leverage=leverage,
+    //     entry_price=arc4.UInt64(current_price),
+    //     liquidation_price=arc4.UInt64(liquidation_price),
+    //     last_funding_time=arc4.UInt64(Global.latest_timestamp),
+    //     accumulated_funding=arc4.UInt64(0),
+    //     open_time=arc4.UInt64(Global.latest_timestamp),
+    //     is_open=Bool(True),
+    // )
+    swap
+    box_put
+    // perpetuals_market.py:275-276
+    // # Update market state
+    // self.total_positions += 1
+    intc_0 // 0
+    bytec 15 // "total_positions"
+    app_global_get_ex
+    assert // check self.total_positions exists
+    intc_1 // 1
+    +
+    bytec 15 // "total_positions"
+    swap
+    app_global_put
+    // perpetuals_market.py:277
+    // self.active_positions += 1
+    intc_0 // 0
+    bytec 6 // "active_positions"
+    app_global_get_ex
+    assert // check self.active_positions exists
+    intc_1 // 1
+    +
+    bytec 6 // "active_positions"
+    swap
+    app_global_put
+    // perpetuals_market.py:278
+    // self.total_volume += size.native
+    intc_0 // 0
+    bytec 16 // "total_volume"
+    app_global_get_ex
+    assert // check self.total_volume exists
+    uncover 2
+    +
+    bytec 16 // "total_volume"
+    swap
+    app_global_put
+    // perpetuals_market.py:280
+    // if is_long.native:
+    bz open_position_else_body@3
+    // perpetuals_market.py:281
+    // self.total_long_oi += size.native
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    +
+    bytec_3 // "total_long_oi"
+    swap
+    app_global_put
+
+open_position_after_if_else@4:
+    // perpetuals_market.py:285-290
+    // # Transfer margin to pool
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=net_margin,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:289
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:287
+    // receiver=self.perps_pool,
+    intc_0 // 0
+    bytec 10 // "perps_pool"
+    app_global_get_ex
+    assert // check self.perps_pool exists
+    dig 5
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:285-286
+    // # Transfer margin to pool
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:285-290
+    // # Transfer margin to pool
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=net_margin,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+    // perpetuals_market.py:292-293
+    // # Keep operational fee in contract (no action needed - stays in balance)
+    // self.operational_reserve += operational_fee
+    intc_0 // 0
+    bytec 9 // "operational_reserve"
+    app_global_get_ex
+    assert // check self.operational_reserve exists
+    dig 2
+    +
+    bytec 9 // "operational_reserve"
+    swap
+    app_global_put
+    // perpetuals_market.py:295-296
+    // # Transfer only staking portion to staking contract
+    // if staking_fee > 0:
+    dig 2
+    bz open_position_after_if_else@8
+    // perpetuals_market.py:297-301
+    // itxn.Payment(
+    //     receiver=self.staking_contract,
+    //     amount=staking_fee,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:300
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:298
+    // receiver=self.staking_contract,
+    intc_0 // 0
+    bytec 13 // "staking_contract"
+    app_global_get_ex
+    assert // check self.staking_contract exists
+    dig 4
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:297
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:297-301
+    // itxn.Payment(
+    //     receiver=self.staking_contract,
+    //     amount=staking_fee,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+
+open_position_after_if_else@8:
+    // perpetuals_market.py:303
+    // self.total_fees_collected += total_fee
+    intc_0 // 0
+    bytec 8 // "total_fees_collected"
+    app_global_get_ex
+    assert // check self.total_fees_collected exists
+    dig 5
+    +
+    bytec 8 // "total_fees_collected"
+    swap
+    app_global_put
+    // perpetuals_market.py:196
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    dig 1
+    concat
+    log
+    intc_1 // 1
+    return
+
+open_position_else_body@3:
+    // perpetuals_market.py:283
+    // self.total_short_oi += size.native
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    +
+    bytec 4 // "total_short_oi"
+    swap
+    app_global_put
+    b open_position_after_if_else@4
+
+
+// perpetuals_market.PerpetualsMarket.close_position[routing]() -> void:
+close_position:
+    intc_0 // 0
+    dup
+    pushbytes ""
+    dupn 8
+    // perpetuals_market.py:307
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:318
+    // assert not self.is_paused, "Market paused"
+    intc_0 // 0
+    bytec 7 // "is_paused"
+    app_global_get_ex
+    assert // check self.is_paused exists
+    !
+    assert // Market paused
+    // perpetuals_market.py:322
+    // assert position_key in self.positions, "Position not found"
+    bytec 20 // 0x706f735f
+    swap
+    concat
+    dupn 2
+    box_len
+    bury 1
+    assert // Position not found
+    // perpetuals_market.py:323
+    // pos = self.positions[position_key].copy()
+    box_get
+    pop
+    dupn 2
+    // perpetuals_market.py:325
+    // assert pos.is_open.native, "Position already closed"
+    pushint 840
+    getbit
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+    intc_0 // 0
+    getbit
+    assert // Position already closed
+    // perpetuals_market.py:326
+    // assert Txn.sender == pos.trader.native, "Not position owner"
+    txn Sender
+    dig 1
+    extract 8 32
+    dup
+    cover 3
+    ==
+    assert // Not position owner
+    // perpetuals_market.py:328-329
+    // # Get current price
+    // current_price = self._get_oracle_price()
+    callsub _get_oracle_price
+    dup
+    cover 2
+    // perpetuals_market.py:330
+    // assert current_price > 0, "Invalid oracle price"
+    assert // Invalid oracle price
+    // perpetuals_market.py:332-333
+    // # Calculate PnL
+    // pnl = UInt64(0)
+    intc_0 // 0
+    swap
+    // perpetuals_market.py:336
+    // if pos.is_long.native:
+    pushint 320
+    getbit
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+    dup
+    intc_0 // 0
+    getbit
+    dup
+    bz close_position_else_body@6
+    // perpetuals_market.py:337
+    // if current_price >= pos.entry_price.native:
+    dig 5
+    pushint 65
+    extract_uint64
+    dup
+    dig 5
+    <=
+    bz close_position_else_body@4
+    // perpetuals_market.py:338
+    // price_diff = current_price - pos.entry_price.native
+    dig 4
+    swap
+    -
+    bury 13
+    // perpetuals_market.py:339
+    // is_profit = True
+    intc_1 // 1
+    bury 16
+
+close_position_after_if_else@10:
+    // perpetuals_market.py:351
+    // if pos.entry_price.native > 0:
+    dig 5
+    dup
+    extract 65 8
+    bury 19
+    pushint 65
+    extract_uint64
+    dup
+    bury 12
+    bz close_position_after_if_else@12
+    // perpetuals_market.py:352
+    // pnl = (price_diff * pos.size.native) // pos.entry_price.native
+    dig 5
+    pushint 41
+    extract_uint64
+    dig 13
+    *
+    dig 11
+    /
+    bury 3
+
+close_position_after_if_else@12:
+    // perpetuals_market.py:354-355
+    // # Calculate closing fee
+    // total_fee = (pos.size.native * self.close_fee) // 10000
+    dig 5
+    dup
+    extract 41 8
+    bury 18
+    pushint 41
+    extract_uint64
+    dup
+    bury 11
+    intc_0 // 0
+    bytec 27 // "close_fee"
+    app_global_get_ex
+    assert // check self.close_fee exists
+    *
+    intc_3 // 10000
+    /
+    dup
+    bury 9
+    // perpetuals_market.py:357-358
+    // # Dynamic fee routing based on contract balance
+    // operational_fee, staking_fee = self._route_fee(total_fee)
+    callsub _route_fee
+    bury 13
+    bury 14
+    // perpetuals_market.py:362
+    // if is_profit:
+    dig 15
+    bz close_position_else_body@17
+    // perpetuals_market.py:363
+    // net_return = pos.collateral.native + pnl
+    dig 5
+    pushint 49
+    extract_uint64
+    dig 3
+    +
+    dup
+    bury 16
+    // perpetuals_market.py:364
+    // if net_return > total_fee:
+    dig 8
+    >
+    bz close_position_else_body@15
+    // perpetuals_market.py:365
+    // net_return -= total_fee
+    dig 14
+    dig 8
+    -
+    bury 15
+
+close_position_after_if_else@24:
+    // perpetuals_market.py:380
+    // position_id=pos.position_id,
+    dig 5
+    dup
+    extract 0 8
+    // perpetuals_market.py:384
+    // collateral=pos.collateral,
+    dig 1
+    extract 49 8
+    // perpetuals_market.py:385
+    // leverage=pos.leverage,
+    dig 2
+    extract 57 8
+    // perpetuals_market.py:387
+    // liquidation_price=pos.liquidation_price,
+    dig 3
+    extract 73 8
+    // perpetuals_market.py:388
+    // last_funding_time=pos.last_funding_time,
+    dig 4
+    extract 81 8
+    // perpetuals_market.py:389
+    // accumulated_funding=pos.accumulated_funding,
+    dig 5
+    extract 89 8
+    // perpetuals_market.py:390
+    // open_time=pos.open_time,
+    uncover 6
+    extract 97 8
+    // perpetuals_market.py:378-392
+    // # Mark position as closed in BoxMap
+    // self.positions[position_key] = Position(
+    //     position_id=pos.position_id,
+    //     trader=pos.trader,
+    //     is_long=pos.is_long,
+    //     size=pos.size,
+    //     collateral=pos.collateral,
+    //     leverage=pos.leverage,
+    //     entry_price=pos.entry_price,
+    //     liquidation_price=pos.liquidation_price,
+    //     last_funding_time=pos.last_funding_time,
+    //     accumulated_funding=pos.accumulated_funding,
+    //     open_time=pos.open_time,
+    //     is_open=Bool(False),
+    // )
+    uncover 6
+    dig 11
+    concat
+    dig 8
+    concat
+    dig 23
+    concat
+    uncover 6
+    concat
+    uncover 5
+    concat
+    dig 22
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    // perpetuals_market.py:391
+    // is_open=Bool(False),
+    bytec 5 // 0x00
+    // perpetuals_market.py:378-392
+    // # Mark position as closed in BoxMap
+    // self.positions[position_key] = Position(
+    //     position_id=pos.position_id,
+    //     trader=pos.trader,
+    //     is_long=pos.is_long,
+    //     size=pos.size,
+    //     collateral=pos.collateral,
+    //     leverage=pos.leverage,
+    //     entry_price=pos.entry_price,
+    //     liquidation_price=pos.liquidation_price,
+    //     last_funding_time=pos.last_funding_time,
+    //     accumulated_funding=pos.accumulated_funding,
+    //     open_time=pos.open_time,
+    //     is_open=Bool(False),
+    // )
+    concat
+    dig 7
+    swap
+    box_put
+    // perpetuals_market.py:394-396
+    // # Process PnL and return funds through pool
+    // # Pool handles the payout to trader if profitable
+    // if net_return > 0:
+    dig 14
+    bz close_position_after_if_else@27
+    // perpetuals_market.py:397-409
+    // # Call pool's process_pnl method to handle trader payout
+    // # For profit: pool pays trader
+    // # For loss: collateral stays in pool (already transferred during open)
+    // itxn.ApplicationCall(
+    //     app_id=Application(self.perps_pool_app_id),
+    //     app_args=(
+    //         arc4.arc4_signature("process_pnl(uint64,bool,address)bool"),
+    //         arc4.UInt64(net_return),
+    //         arc4.Bool(is_profit),
+    //         pos.trader,
+    //     ),
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:408
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:401
+    // app_id=Application(self.perps_pool_app_id),
+    intc_0 // 0
+    bytec 14 // "perps_pool_app_id"
+    app_global_get_ex
+    assert // check self.perps_pool_app_id exists
+    // perpetuals_market.py:404
+    // arc4.UInt64(net_return),
+    dig 16
+    itob
+    // perpetuals_market.py:405
+    // arc4.Bool(is_profit),
+    bytec 5 // 0x00
+    intc_0 // 0
+    dig 20
+    setbit
+    // perpetuals_market.py:403
+    // arc4.arc4_signature("process_pnl(uint64,bool,address)bool"),
+    pushbytes 0x62464d67 // method "process_pnl(uint64,bool,address)bool"
+    itxn_field ApplicationArgs
+    swap
+    itxn_field ApplicationArgs
+    itxn_field ApplicationArgs
+    dig 6
+    itxn_field ApplicationArgs
+    itxn_field ApplicationID
+    // perpetuals_market.py:397-400
+    // # Call pool's process_pnl method to handle trader payout
+    // # For profit: pool pays trader
+    // # For loss: collateral stays in pool (already transferred during open)
+    // itxn.ApplicationCall(
+    pushint 6 // appl
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:397-409
+    // # Call pool's process_pnl method to handle trader payout
+    // # For profit: pool pays trader
+    // # For loss: collateral stays in pool (already transferred during open)
+    // itxn.ApplicationCall(
+    //     app_id=Application(self.perps_pool_app_id),
+    //     app_args=(
+    //         arc4.arc4_signature("process_pnl(uint64,bool,address)bool"),
+    //         arc4.UInt64(net_return),
+    //         arc4.Bool(is_profit),
+    //         pos.trader,
+    //     ),
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+
+close_position_after_if_else@27:
+    // perpetuals_market.py:411-412
+    // # Keep operational fee in contract (no action needed - stays in balance)
+    // self.operational_reserve += operational_fee
+    intc_0 // 0
+    bytec 9 // "operational_reserve"
+    app_global_get_ex
+    assert // check self.operational_reserve exists
+    dig 14
+    +
+    bytec 9 // "operational_reserve"
+    swap
+    app_global_put
+    // perpetuals_market.py:414-415
+    // # Transfer only staking portion to staking contract
+    // if staking_fee > 0:
+    dig 11
+    bz close_position_after_if_else@30
+    // perpetuals_market.py:416-420
+    // itxn.Payment(
+    //     receiver=self.staking_contract,
+    //     amount=staking_fee,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:419
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:417
+    // receiver=self.staking_contract,
+    intc_0 // 0
+    bytec 13 // "staking_contract"
+    app_global_get_ex
+    assert // check self.staking_contract exists
+    dig 13
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:416
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:416-420
+    // itxn.Payment(
+    //     receiver=self.staking_contract,
+    //     amount=staking_fee,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+
+close_position_after_if_else@30:
+    // perpetuals_market.py:422-423
+    // # Update market state
+    // self.active_positions -= 1
+    intc_0 // 0
+    bytec 6 // "active_positions"
+    app_global_get_ex
+    assert // check self.active_positions exists
+    intc_1 // 1
+    -
+    bytec 6 // "active_positions"
+    swap
+    app_global_put
+    // perpetuals_market.py:424
+    // self.total_fees_collected += total_fee
+    intc_0 // 0
+    bytec 8 // "total_fees_collected"
+    app_global_get_ex
+    assert // check self.total_fees_collected exists
+    dig 8
+    +
+    bytec 8 // "total_fees_collected"
+    swap
+    app_global_put
+    // perpetuals_market.py:426
+    // if pos.is_long.native:
+    dup
+    bz close_position_else_body@34
+    // perpetuals_market.py:427
+    // if self.total_long_oi >= pos.size.native:
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    dig 10
+    >=
+    bz close_position_after_if_else@37
+    // perpetuals_market.py:428
+    // self.total_long_oi -= pos.size.native
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    dig 10
+    -
+    bytec_3 // "total_long_oi"
+    swap
+    app_global_put
+
+close_position_after_if_else@37:
+    // perpetuals_market.py:433
+    // return arc4.UInt64(net_return)
+    dig 14
+    itob
+    // perpetuals_market.py:307
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+close_position_else_body@34:
+    // perpetuals_market.py:430
+    // if self.total_short_oi >= pos.size.native:
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    dig 10
+    >=
+    bz close_position_after_if_else@37
+    // perpetuals_market.py:431
+    // self.total_short_oi -= pos.size.native
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    dig 10
+    -
+    bytec 4 // "total_short_oi"
+    swap
+    app_global_put
+    b close_position_after_if_else@37
+
+close_position_else_body@15:
+    // perpetuals_market.py:367
+    // net_return = UInt64(0)
+    intc_0 // 0
+    bury 15
+    b close_position_after_if_else@24
+
+close_position_else_body@17:
+    // perpetuals_market.py:369
+    // if pos.collateral.native > pnl:
+    dig 5
+    pushint 49
+    extract_uint64
+    dup
+    bury 10
+    dig 3
+    >
+    bz close_position_else_body@22
+    // perpetuals_market.py:370
+    // net_return = pos.collateral.native - pnl
+    dig 8
+    dig 3
+    -
+    dup
+    bury 16
+    // perpetuals_market.py:371
+    // if net_return > total_fee:
+    dig 8
+    >
+    bz close_position_else_body@20
+    // perpetuals_market.py:372
+    // net_return -= total_fee
+    dig 14
+    dig 8
+    -
+    bury 15
+    b close_position_after_if_else@24
+
+close_position_else_body@20:
+    // perpetuals_market.py:374
+    // net_return = UInt64(0)
+    intc_0 // 0
+    bury 15
+    b close_position_after_if_else@24
+
+close_position_else_body@22:
+    // perpetuals_market.py:376
+    // net_return = UInt64(0)
+    intc_0 // 0
+    bury 15
+    b close_position_after_if_else@24
+
+close_position_else_body@4:
+    // perpetuals_market.py:341
+    // price_diff = pos.entry_price.native - current_price
+    dig 4
+    -
+    bury 13
+    // perpetuals_market.py:342
+    // is_profit = False
+    intc_0 // 0
+    bury 16
+    b close_position_after_if_else@10
+
+close_position_else_body@6:
+    // perpetuals_market.py:344
+    // if pos.entry_price.native >= current_price:
+    dig 5
+    pushint 65
+    extract_uint64
+    dup
+    dig 5
+    >=
+    bz close_position_else_body@8
+    // perpetuals_market.py:345
+    // price_diff = pos.entry_price.native - current_price
+    dig 4
+    -
+    bury 13
+    // perpetuals_market.py:346
+    // is_profit = True
+    intc_1 // 1
+    bury 16
+    b close_position_after_if_else@10
+
+close_position_else_body@8:
+    // perpetuals_market.py:348
+    // price_diff = current_price - pos.entry_price.native
+    dig 4
+    swap
+    -
+    bury 13
+    // perpetuals_market.py:349
+    // is_profit = False
+    intc_0 // 0
+    bury 16
+    b close_position_after_if_else@10
+
+
+// perpetuals_market.PerpetualsMarket.add_margin[routing]() -> void:
+add_margin:
+    // perpetuals_market.py:435
+    // @abimethod()
+    txna ApplicationArgs 1
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:448
+    // assert not self.is_paused, "Market paused"
+    intc_0 // 0
+    bytec 7 // "is_paused"
+    app_global_get_ex
+    assert // check self.is_paused exists
+    !
+    assert // Market paused
+    // perpetuals_market.py:450-451
+    // # Verify payment
+    // assert gtxn.PaymentTransaction(0).amount >= amount.native, "Insufficient payment"
+    intc_0 // 0
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    intc_0 // 0
+    gtxns Amount
+    swap
+    btoi
+    swap
+    dig 1
+    >=
+    assert // Insufficient payment
+    // perpetuals_market.py:452
+    // assert gtxn.PaymentTransaction(0).receiver == Global.current_application_address, "Wrong receiver"
+    intc_0 // 0
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // Wrong receiver
+    // perpetuals_market.py:461-466
+    // # Transfer margin to pool
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=amount.native,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:465
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:463
+    // receiver=self.perps_pool,
+    intc_0 // 0
+    bytec 10 // "perps_pool"
+    app_global_get_ex
+    assert // check self.perps_pool exists
+    uncover 2
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:461-462
+    // # Transfer margin to pool
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:461-466
+    // # Transfer margin to pool
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=amount.native,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+    // perpetuals_market.py:435
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.remove_margin[routing]() -> void:
+remove_margin:
+    // perpetuals_market.py:470
+    // @abimethod()
+    txna ApplicationArgs 1
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:482
+    // assert not self.is_paused, "Market paused"
+    intc_0 // 0
+    bytec 7 // "is_paused"
+    app_global_get_ex
+    assert // check self.is_paused exists
+    !
+    assert // Market paused
+    // perpetuals_market.py:470
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.liquidate[routing]() -> void:
+liquidate:
+    intc_0 // 0
+    dupn 2
+    pushbytes ""
+    dupn 7
+    // perpetuals_market.py:494
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:507
+    // assert not self.is_paused, "Market paused"
+    intc_0 // 0
+    bytec 7 // "is_paused"
+    app_global_get_ex
+    assert // check self.is_paused exists
+    !
+    assert // Market paused
+    // perpetuals_market.py:509-510
+    // # Get current price
+    // current_price = self._get_oracle_price()
+    callsub _get_oracle_price
+    dup
+    cover 2
+    // perpetuals_market.py:511
+    // assert current_price > 0, "Invalid oracle price"
+    assert // Invalid oracle price
+    // perpetuals_market.py:515
+    // assert position_key in self.positions, "Position not found"
+    bytec 20 // 0x706f735f
+    swap
+    concat
+    dupn 2
+    box_len
+    bury 1
+    assert // Position not found
+    // perpetuals_market.py:516
+    // pos = self.positions[position_key].copy()
+    box_get
+    pop
+    dupn 2
+    // perpetuals_market.py:518
+    // assert pos.is_open.native, "Position already closed"
+    pushint 840
+    getbit
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+    intc_0 // 0
+    getbit
+    assert // Position already closed
+    // perpetuals_market.py:520-521
+    // # Calculate current PnL
+    // pnl = UInt64(0)
+    intc_0 // 0
+    swap
+    // perpetuals_market.py:524
+    // if pos.is_long.native:
+    pushint 320
+    getbit
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+    dup
+    intc_0 // 0
+    getbit
+    dup
+    bz liquidate_else_body@6
+    // perpetuals_market.py:525
+    // if current_price >= pos.entry_price.native:
+    dig 3
+    pushint 65
+    extract_uint64
+    dup
+    dig 7
+    <=
+    bz liquidate_else_body@4
+    // perpetuals_market.py:526
+    // is_profit = True
+    intc_1 // 1
+    bury 14
+    // perpetuals_market.py:527
+    // price_diff = current_price - pos.entry_price.native
+    dig 6
+    swap
+    -
+    bury 11
+
+liquidate_after_if_else@10:
+    // perpetuals_market.py:539
+    // if pos.entry_price.native > 0:
+    dig 3
+    dup
+    extract 65 8
+    bury 18
+    pushint 65
+    extract_uint64
+    dup
+    bury 9
+    bz liquidate_after_if_else@12
+    // perpetuals_market.py:540
+    // pnl = (price_diff * pos.size.native) // pos.entry_price.native
+    dig 3
+    pushint 41
+    extract_uint64
+    dig 11
+    *
+    dig 8
+    /
+    bury 3
+
+liquidate_after_if_else@12:
+    // perpetuals_market.py:542-543
+    // # Calculate effective margin
+    // effective_margin = pos.collateral.native
+    dig 3
+    dup
+    extract 49 8
+    bury 17
+    pushint 49
+    extract_uint64
+    bury 14
+    // perpetuals_market.py:544
+    // if is_profit:
+    dig 12
+    bz liquidate_else_body@14
+    // perpetuals_market.py:545
+    // effective_margin += pnl
+    dig 13
+    dig 3
+    +
+    bury 14
+
+liquidate_after_if_else@18:
+    // perpetuals_market.py:552-553
+    // # Verify position is liquidatable
+    // margin_ratio = UInt64(0)
+    intc_0 // 0
+    bury 12
+    // perpetuals_market.py:554
+    // if pos.size.native > 0:
+    dig 3
+    dup
+    extract 41 8
+    bury 16
+    pushint 41
+    extract_uint64
+    dup
+    bury 8
+    bz liquidate_after_if_else@20
+    // perpetuals_market.py:555
+    // margin_ratio = (effective_margin * 10000) // pos.size.native
+    dig 13
+    intc_3 // 10000
+    *
+    dig 7
+    /
+    bury 12
+
+liquidate_after_if_else@20:
+    // perpetuals_market.py:556
+    // assert margin_ratio < self.maintenance_margin, "Position not liquidatable"
+    intc_0 // 0
+    bytec 12 // "maintenance_margin"
+    app_global_get_ex
+    assert // check self.maintenance_margin exists
+    dig 12
+    >
+    assert // Position not liquidatable
+    // perpetuals_market.py:558-559
+    // # Calculate liquidator reward
+    // reward = UInt64(0)
+    intc_0 // 0
+    bury 9
+    // perpetuals_market.py:560
+    // if effective_margin > 0:
+    dig 13
+    bz liquidate_after_if_else@22
+    // perpetuals_market.py:561
+    // reward = (effective_margin * self.liquidator_reward) // 10000
+    intc_0 // 0
+    bytec 31 // "liquidator_reward"
+    app_global_get_ex
+    assert // check self.liquidator_reward exists
+    dig 14
+    *
+    intc_3 // 10000
+    /
+    bury 9
+
+liquidate_after_if_else@22:
+    // perpetuals_market.py:563-564
+    // # Remainder goes to pool
+    // remainder = UInt64(0)
+    intc_0 // 0
+    bury 10
+    // perpetuals_market.py:565
+    // if effective_margin > reward:
+    dig 13
+    dig 9
+    >
+    bz liquidate_after_if_else@24
+    // perpetuals_market.py:566
+    // remainder = effective_margin - reward
+    dig 13
+    dig 9
+    -
+    bury 10
+
+liquidate_after_if_else@24:
+    // perpetuals_market.py:570
+    // position_id=pos.position_id,
+    dig 3
+    dup
+    extract 0 8
+    // perpetuals_market.py:571
+    // trader=pos.trader,
+    dig 1
+    extract 8 32
+    // perpetuals_market.py:575
+    // leverage=pos.leverage,
+    dig 2
+    extract 57 8
+    // perpetuals_market.py:577
+    // liquidation_price=pos.liquidation_price,
+    dig 3
+    extract 73 8
+    // perpetuals_market.py:578
+    // last_funding_time=pos.last_funding_time,
+    dig 4
+    extract 81 8
+    // perpetuals_market.py:579
+    // accumulated_funding=pos.accumulated_funding,
+    dig 5
+    extract 89 8
+    // perpetuals_market.py:580
+    // open_time=pos.open_time,
+    uncover 6
+    extract 97 8
+    // perpetuals_market.py:568-582
+    // # Mark position as closed
+    // self.positions[position_key] = Position(
+    //     position_id=pos.position_id,
+    //     trader=pos.trader,
+    //     is_long=pos.is_long,
+    //     size=pos.size,
+    //     collateral=pos.collateral,
+    //     leverage=pos.leverage,
+    //     entry_price=pos.entry_price,
+    //     liquidation_price=pos.liquidation_price,
+    //     last_funding_time=pos.last_funding_time,
+    //     accumulated_funding=pos.accumulated_funding,
+    //     open_time=pos.open_time,
+    //     is_open=Bool(False),
+    // )
+    uncover 6
+    uncover 6
+    concat
+    dig 7
+    concat
+    dig 20
+    concat
+    dig 21
+    concat
+    uncover 5
+    concat
+    dig 21
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    // perpetuals_market.py:581
+    // is_open=Bool(False),
+    bytec 5 // 0x00
+    // perpetuals_market.py:568-582
+    // # Mark position as closed
+    // self.positions[position_key] = Position(
+    //     position_id=pos.position_id,
+    //     trader=pos.trader,
+    //     is_long=pos.is_long,
+    //     size=pos.size,
+    //     collateral=pos.collateral,
+    //     leverage=pos.leverage,
+    //     entry_price=pos.entry_price,
+    //     liquidation_price=pos.liquidation_price,
+    //     last_funding_time=pos.last_funding_time,
+    //     accumulated_funding=pos.accumulated_funding,
+    //     open_time=pos.open_time,
+    //     is_open=Bool(False),
+    // )
+    concat
+    dig 5
+    swap
+    box_put
+    // perpetuals_market.py:584-585
+    // # Pay liquidator reward
+    // if reward > 0:
+    dig 8
+    bz liquidate_after_if_else@27
+    // perpetuals_market.py:586-590
+    // itxn.Payment(
+    //     receiver=Txn.sender,
+    //     amount=reward,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:589
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:587
+    // receiver=Txn.sender,
+    txn Sender
+    dig 10
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:586
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:586-590
+    // itxn.Payment(
+    //     receiver=Txn.sender,
+    //     amount=reward,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+
+liquidate_after_if_else@27:
+    // perpetuals_market.py:592-593
+    // # Send remainder to pool
+    // if remainder > 0:
+    dig 9
+    bz liquidate_after_if_else@30
+    // perpetuals_market.py:594-598
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=remainder,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_begin
+    // perpetuals_market.py:597
+    // fee=Global.min_txn_fee,
+    global MinTxnFee
+    // perpetuals_market.py:595
+    // receiver=self.perps_pool,
+    intc_0 // 0
+    bytec 10 // "perps_pool"
+    app_global_get_ex
+    assert // check self.perps_pool exists
+    dig 11
+    itxn_field Amount
+    itxn_field Receiver
+    // perpetuals_market.py:594
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    itxn_field Fee
+    // perpetuals_market.py:594-598
+    // itxn.Payment(
+    //     receiver=self.perps_pool,
+    //     amount=remainder,
+    //     fee=Global.min_txn_fee,
+    // ).submit()
+    itxn_submit
+
+liquidate_after_if_else@30:
+    // perpetuals_market.py:600-601
+    // # Update market state
+    // self.total_liquidations += 1
+    intc_0 // 0
+    bytec 17 // "total_liquidations"
+    app_global_get_ex
+    assert // check self.total_liquidations exists
+    intc_1 // 1
+    +
+    bytec 17 // "total_liquidations"
+    swap
+    app_global_put
+    // perpetuals_market.py:602
+    // self.active_positions -= 1
+    intc_0 // 0
+    bytec 6 // "active_positions"
+    app_global_get_ex
+    assert // check self.active_positions exists
+    intc_1 // 1
+    -
+    bytec 6 // "active_positions"
+    swap
+    app_global_put
+    // perpetuals_market.py:604
+    // if pos.is_long.native:
+    dup
+    bz liquidate_else_body@34
+    // perpetuals_market.py:605
+    // if self.total_long_oi >= pos.size.native:
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    dig 7
+    >=
+    bz liquidate_after_if_else@37
+    // perpetuals_market.py:606
+    // self.total_long_oi -= pos.size.native
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    dig 7
+    -
+    bytec_3 // "total_long_oi"
+    swap
+    app_global_put
+
+liquidate_after_if_else@37:
+    // perpetuals_market.py:494
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+liquidate_else_body@34:
+    // perpetuals_market.py:608
+    // if self.total_short_oi >= pos.size.native:
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    dig 7
+    >=
+    bz liquidate_after_if_else@37
+    // perpetuals_market.py:609
+    // self.total_short_oi -= pos.size.native
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    dig 7
+    -
+    bytec 4 // "total_short_oi"
+    swap
+    app_global_put
+    b liquidate_after_if_else@37
+
+liquidate_else_body@14:
+    // perpetuals_market.py:547
+    // if effective_margin > pnl:
+    dig 13
+    dig 3
+    >
+    bz liquidate_else_body@16
+    // perpetuals_market.py:548
+    // effective_margin -= pnl
+    dig 13
+    dig 3
+    -
+    bury 14
+    b liquidate_after_if_else@18
+
+liquidate_else_body@16:
+    // perpetuals_market.py:550
+    // effective_margin = UInt64(0)
+    intc_0 // 0
+    bury 14
+    b liquidate_after_if_else@18
+
+liquidate_else_body@4:
+    // perpetuals_market.py:529
+    // is_profit = False
+    intc_0 // 0
+    bury 14
+    // perpetuals_market.py:530
+    // price_diff = pos.entry_price.native - current_price
+    dig 6
+    -
+    bury 11
+    b liquidate_after_if_else@10
+
+liquidate_else_body@6:
+    // perpetuals_market.py:532
+    // if pos.entry_price.native >= current_price:
+    dig 3
+    pushint 65
+    extract_uint64
+    dup
+    dig 7
+    >=
+    bz liquidate_else_body@8
+    // perpetuals_market.py:533
+    // is_profit = True
+    intc_1 // 1
+    bury 14
+    // perpetuals_market.py:534
+    // price_diff = pos.entry_price.native - current_price
+    dig 6
+    -
+    bury 11
+    b liquidate_after_if_else@10
+
+liquidate_else_body@8:
+    // perpetuals_market.py:536
+    // is_profit = False
+    intc_0 // 0
+    bury 14
+    // perpetuals_market.py:537
+    // price_diff = current_price - pos.entry_price.native
+    dig 6
+    swap
+    -
+    bury 11
+    b liquidate_after_if_else@10
+
+
+// perpetuals_market.PerpetualsMarket.apply_funding[routing]() -> void:
+apply_funding:
+    // perpetuals_market.py:613
+    // @abimethod()
+    txna ApplicationArgs 1
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.calculate_pnl[routing]() -> void:
+calculate_pnl:
+    // perpetuals_market.py:636
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_1 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 4
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    callsub perpetuals_market.PerpetualsMarket.calculate_pnl
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.is_liquidatable[routing]() -> void:
+is_liquidatable:
+    pushbytes ""
+    // perpetuals_market.py:690
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_1 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 4
+    dup
+    cover 4
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 5
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:712-713
+    // # Calculate current PnL
+    // pnl_result = self.calculate_pnl(is_long, entry_price, current_price, size)
+    uncover 4
+    uncover 4
+    uncover 2
+    uncover 3
+    callsub perpetuals_market.PerpetualsMarket.calculate_pnl
+    dup
+    uncover 2
+    // perpetuals_market.py:715-716
+    // # Calculate current margin
+    // effective_margin = collateral.native
+    btoi
+    cover 2
+    // perpetuals_market.py:717
+    // if pnl_result.is_profit.native:
+    pushint 64
+    getbit
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+    intc_0 // 0
+    getbit
+    bz is_liquidatable_else_body@3
+    // perpetuals_market.py:718
+    // effective_margin += pnl_result.unrealized_pnl.native
+    intc_0 // 0
+    extract_uint64
+    dig 1
+    +
+    bury 1
+
+is_liquidatable_after_if_else@7:
+    // perpetuals_market.py:726-728
+    // # Calculate margin ratio
+    // # margin_ratio = (effective_margin * 10000) / size
+    // margin_ratio = (effective_margin * 10000) // size.native
+    dup
+    intc_3 // 10000
+    *
+    dig 2
+    btoi
+    /
+    // perpetuals_market.py:730-731
+    // # Liquidatable if below maintenance margin
+    // return Bool(margin_ratio < self.maintenance_margin)
+    intc_0 // 0
+    bytec 12 // "maintenance_margin"
+    app_global_get_ex
+    assert // check self.maintenance_margin exists
+    <
+    bytec 5 // 0x00
+    intc_0 // 0
+    uncover 2
+    setbit
+
+is_liquidatable_after_inlined_perpetuals_market.PerpetualsMarket.is_liquidatable@8:
+    // perpetuals_market.py:690
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+is_liquidatable_else_body@3:
+    // perpetuals_market.py:720
+    // if effective_margin > pnl_result.unrealized_pnl.native:
+    intc_0 // 0
+    extract_uint64
+    dup
+    bury 4
+    dig 1
+    <
+    bz is_liquidatable_else_body@5
+    // perpetuals_market.py:721
+    // effective_margin -= pnl_result.unrealized_pnl.native
+    dup
+    dig 3
+    -
+    bury 1
+    b is_liquidatable_after_if_else@7
+
+is_liquidatable_else_body@5:
+    // perpetuals_market.py:723-724
+    // # Negative margin = definitely liquidatable
+    // return Bool(True)
+    pushbytes 0x80
+    // perpetuals_market.py:690
+    // @abimethod()
+    b is_liquidatable_after_inlined_perpetuals_market.PerpetualsMarket.is_liquidatable@8
+
+
+// perpetuals_market.PerpetualsMarket.get_position[routing]() -> void:
+get_position:
+    // perpetuals_market.py:733
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:738
+    // assert position_key in self.positions, "Position not found"
+    bytec 20 // 0x706f735f
+    swap
+    concat
+    dup
+    box_len
+    bury 1
+    assert // Position not found
+    // perpetuals_market.py:739
+    // return self.positions[position_key].copy()
+    box_get
+    pop
+    // perpetuals_market.py:733
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.get_market_stats[routing]() -> void:
+get_market_stats:
+    // perpetuals_market.py:744
+    // current_price = self._get_oracle_price()
+    callsub _get_oracle_price
+    // perpetuals_market.py:750
+    // total_positions=arc4.UInt64(self.total_positions),
+    intc_0 // 0
+    bytec 15 // "total_positions"
+    app_global_get_ex
+    assert // check self.total_positions exists
+    itob
+    // perpetuals_market.py:751
+    // active_positions=arc4.UInt64(self.active_positions),
+    intc_0 // 0
+    bytec 6 // "active_positions"
+    app_global_get_ex
+    assert // check self.active_positions exists
+    itob
+    // perpetuals_market.py:752
+    // total_volume=arc4.UInt64(self.total_volume),
+    intc_0 // 0
+    bytec 16 // "total_volume"
+    app_global_get_ex
+    assert // check self.total_volume exists
+    itob
+    // perpetuals_market.py:753
+    // total_long_oi=arc4.UInt64(self.total_long_oi),
+    intc_0 // 0
+    bytec_3 // "total_long_oi"
+    app_global_get_ex
+    assert // check self.total_long_oi exists
+    itob
+    // perpetuals_market.py:754
+    // total_short_oi=arc4.UInt64(self.total_short_oi),
+    intc_0 // 0
+    bytec 4 // "total_short_oi"
+    app_global_get_ex
+    assert // check self.total_short_oi exists
+    itob
+    // perpetuals_market.py:755
+    // total_liquidations=arc4.UInt64(self.total_liquidations),
+    intc_0 // 0
+    bytec 17 // "total_liquidations"
+    app_global_get_ex
+    assert // check self.total_liquidations exists
+    itob
+    // perpetuals_market.py:756
+    // total_fees_collected=arc4.UInt64(self.total_fees_collected),
+    intc_0 // 0
+    bytec 8 // "total_fees_collected"
+    app_global_get_ex
+    assert // check self.total_fees_collected exists
+    itob
+    // perpetuals_market.py:757
+    // current_price=arc4.UInt64(current_price),
+    uncover 7
+    itob
+    // perpetuals_market.py:746-747
+    // # Get funding rate from pool (would be inner transaction)
+    // funding_rate = UInt64(0)
+    intc_0 // 0
+    // perpetuals_market.py:758
+    // funding_rate=arc4.UInt64(funding_rate),
+    itob
+    // perpetuals_market.py:749-759
+    // return MarketStats(
+    //     total_positions=arc4.UInt64(self.total_positions),
+    //     active_positions=arc4.UInt64(self.active_positions),
+    //     total_volume=arc4.UInt64(self.total_volume),
+    //     total_long_oi=arc4.UInt64(self.total_long_oi),
+    //     total_short_oi=arc4.UInt64(self.total_short_oi),
+    //     total_liquidations=arc4.UInt64(self.total_liquidations),
+    //     total_fees_collected=arc4.UInt64(self.total_fees_collected),
+    //     current_price=arc4.UInt64(current_price),
+    //     funding_rate=arc4.UInt64(funding_rate),
+    // )
+    uncover 8
+    uncover 8
+    concat
+    uncover 7
+    concat
+    uncover 6
+    concat
+    uncover 5
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    // perpetuals_market.py:741
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.get_current_price[routing]() -> void:
+get_current_price:
+    // perpetuals_market.py:764
+    // price = self._get_oracle_price()
+    callsub _get_oracle_price
+    // perpetuals_market.py:765
+    // return arc4.UInt64(price)
+    itob
+    // perpetuals_market.py:761
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.calculate_required_margin[routing]() -> void:
+calculate_required_margin:
+    // perpetuals_market.py:767
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:783
+    // margin = (size.native * self.leverage_precision) // leverage.native
+    swap
+    btoi
+    intc_0 // 0
+    bytec 28 // "leverage_precision"
+    app_global_get_ex
+    assert // check self.leverage_precision exists
+    *
+    swap
+    btoi
+    /
+    dup
+    // perpetuals_market.py:784
+    // if margin < self.min_margin:
+    intc_0 // 0
+    bytec 18 // "min_margin"
+    app_global_get_ex
+    assert // check self.min_margin exists
+    <
+    bz calculate_required_margin_after_if_else@3
+    // perpetuals_market.py:785
+    // margin = self.min_margin
+    intc_0 // 0
+    bytec 18 // "min_margin"
+    app_global_get_ex
+    swap
+    bury 2
+    assert // check self.min_margin exists
+
+calculate_required_margin_after_if_else@3:
+    // perpetuals_market.py:786
+    // return arc4.UInt64(margin)
+    dup
+    itob
+    // perpetuals_market.py:767
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.calculate_liquidation_price_view[routing]() -> void:
+calculate_liquidation_price_view:
+    // perpetuals_market.py:788
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_1 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 4
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:809
+    // is_long.native,
+    uncover 3
+    intc_0 // 0
+    getbit
+    // perpetuals_market.py:810
+    // entry_price.native,
+    uncover 3
+    btoi
+    // perpetuals_market.py:811
+    // collateral.native,
+    uncover 3
+    btoi
+    // perpetuals_market.py:812
+    // size.native,
+    uncover 3
+    btoi
+    // perpetuals_market.py:808-813
+    // liq_price = self._calculate_liquidation_price(
+    //     is_long.native,
+    //     entry_price.native,
+    //     collateral.native,
+    //     size.native,
+    // )
+    callsub _calculate_liquidation_price
+    // perpetuals_market.py:814
+    // return arc4.UInt64(liq_price)
+    itob
+    // perpetuals_market.py:788
+    // @abimethod()
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.set_leverage_limits[routing]() -> void:
+set_leverage_limits:
+    // perpetuals_market.py:818
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:821
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:822
+    // assert min_lev.native >= 100, "Min 1x leverage"
+    swap
+    btoi
+    dup
+    pushint 100
+    >=
+    assert // Min 1x leverage
+    // perpetuals_market.py:823
+    // assert max_lev.native <= 10000, "Max 100x leverage"
+    swap
+    btoi
+    dup
+    intc_3 // 10000
+    <=
+    assert // Max 100x leverage
+    // perpetuals_market.py:824
+    // self.min_leverage = min_lev.native
+    bytec 24 // "min_leverage"
+    uncover 2
+    app_global_put
+    // perpetuals_market.py:825
+    // self.max_leverage = max_lev.native
+    bytec 25 // "max_leverage"
+    swap
+    app_global_put
+    // perpetuals_market.py:818
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.set_fees[routing]() -> void:
+set_fees:
+    // perpetuals_market.py:828
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:836
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:837
+    // assert open_fee.native <= 100, "Max 1% open fee"
+    uncover 2
+    btoi
+    dup
+    pushint 100
+    <=
+    assert // Max 1% open fee
+    // perpetuals_market.py:838
+    // assert close_fee.native <= 100, "Max 1% close fee"
+    uncover 2
+    btoi
+    dup
+    pushint 100
+    <=
+    assert // Max 1% close fee
+    // perpetuals_market.py:839
+    // assert liquidation_fee.native <= 500, "Max 5% liquidation fee"
+    uncover 2
+    btoi
+    dup
+    pushint 500
+    <=
+    assert // Max 5% liquidation fee
+    // perpetuals_market.py:840
+    // self.open_fee = open_fee.native
+    bytec 26 // "open_fee"
+    uncover 3
+    app_global_put
+    // perpetuals_market.py:841
+    // self.close_fee = close_fee.native
+    bytec 27 // "close_fee"
+    uncover 2
+    app_global_put
+    // perpetuals_market.py:842
+    // self.liquidation_fee = liquidation_fee.native
+    bytec 30 // "liquidation_fee"
+    swap
+    app_global_put
+    // perpetuals_market.py:828
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.set_margin_requirements[routing]() -> void:
+set_margin_requirements:
+    // perpetuals_market.py:845
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:852
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:853
+    // assert initial.native > maintenance.native, "Initial > maintenance"
+    swap
+    btoi
+    swap
+    btoi
+    dup2
+    >
+    assert // Initial > maintenance
+    // perpetuals_market.py:854
+    // assert maintenance.native >= 100, "Min 1% maintenance"
+    dup
+    pushint 100
+    >=
+    assert // Min 1% maintenance
+    // perpetuals_market.py:855
+    // self.initial_margin = initial.native
+    bytec 34 // "initial_margin"
+    uncover 2
+    app_global_put
+    // perpetuals_market.py:856
+    // self.maintenance_margin = maintenance.native
+    bytec 12 // "maintenance_margin"
+    swap
+    app_global_put
+    // perpetuals_market.py:845
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.update_pool_app_id[routing]() -> void:
+update_pool_app_id:
+    // perpetuals_market.py:859
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:862
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:863
+    // self.perps_pool_app_id = pool_app_id.native
+    btoi
+    bytec 14 // "perps_pool_app_id"
+    swap
+    app_global_put
+    // perpetuals_market.py:859
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.transfer_admin[routing]() -> void:
+transfer_admin:
+    // perpetuals_market.py:866
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    pushint 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // perpetuals_market.py:869
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:870
+    // self.admin = new_admin.native
+    bytec_1 // "admin"
+    swap
+    app_global_put
+    // perpetuals_market.py:866
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.pause[routing]() -> void:
+pause:
+    // perpetuals_market.py:876
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:877
+    // self.is_paused = True
+    bytec 7 // "is_paused"
+    intc_1 // 1
+    app_global_put
+    // perpetuals_market.py:873
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.unpause[routing]() -> void:
+unpause:
+    // perpetuals_market.py:883
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:884
+    // self.is_paused = False
+    bytec 7 // "is_paused"
+    intc_0 // 0
+    app_global_put
+    // perpetuals_market.py:880
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.get_operational_stats[routing]() -> void:
+get_operational_stats:
+    // perpetuals_market.py:898
+    // arc4.UInt64(op.balance(Global.current_application_address)),
+    global CurrentApplicationAddress
+    balance
+    itob
+    // perpetuals_market.py:899
+    // arc4.UInt64(self.operational_reserve),
+    intc_0 // 0
+    bytec 9 // "operational_reserve"
+    app_global_get_ex
+    assert // check self.operational_reserve exists
+    itob
+    // perpetuals_market.py:900
+    // arc4.UInt64(self.reserve_target),
+    intc_0 // 0
+    bytec 11 // "reserve_target"
+    app_global_get_ex
+    assert // check self.reserve_target exists
+    itob
+    // perpetuals_market.py:889
+    // @abimethod(readonly=True)
+    cover 2
+    concat
+    swap
+    concat
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.get_current_fee_split[routing]() -> void:
+get_current_fee_split:
+    // perpetuals_market.py:911
+    // current_balance = op.balance(Global.current_application_address)
+    global CurrentApplicationAddress
+    balance
+    dup
+    // perpetuals_market.py:913
+    // if current_balance < self.min_operational_balance:
+    intc_0 // 0
+    bytec 19 // "min_operational_balance"
+    app_global_get_ex
+    assert // check self.min_operational_balance exists
+    <
+    bz get_current_fee_split_else_body@3
+    // perpetuals_market.py:914
+    // return (arc4.UInt64(10000), arc4.UInt64(0))  # 100/0 - Critical
+    pushbytes 0x0000000000002710
+    bytec 35 // 0x0000000000000000
+
+get_current_fee_split_after_inlined_perpetuals_market.PerpetualsMarket.get_current_fee_split@6:
+    // perpetuals_market.py:903
+    // @abimethod(readonly=True)
+    concat
+    bytec_2 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+get_current_fee_split_else_body@3:
+    // perpetuals_market.py:915
+    // elif current_balance < self.reserve_target:
+    intc_0 // 0
+    bytec 11 // "reserve_target"
+    app_global_get_ex
+    assert // check self.reserve_target exists
+    dig 1
+    >
+    bz get_current_fee_split_else_body@5
+    // perpetuals_market.py:916
+    // return (arc4.UInt64(5000), arc4.UInt64(5000))  # 50/50 - Building
+    pushbytes 0x0000000000001388
+    dup
+    // perpetuals_market.py:903
+    // @abimethod(readonly=True)
+    b get_current_fee_split_after_inlined_perpetuals_market.PerpetualsMarket.get_current_fee_split@6
+
+get_current_fee_split_else_body@5:
+    // perpetuals_market.py:918
+    // return (arc4.UInt64(1000), arc4.UInt64(9000))  # 10/90 - Healthy
+    pushbytess 0x00000000000003e8 0x0000000000002328
+    // perpetuals_market.py:903
+    // @abimethod(readonly=True)
+    b get_current_fee_split_after_inlined_perpetuals_market.PerpetualsMarket.get_current_fee_split@6
+
+
+// perpetuals_market.PerpetualsMarket.set_fee_routing_thresholds[routing]() -> void:
+set_fee_routing_thresholds:
+    // perpetuals_market.py:920
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // perpetuals_market.py:936
+    // assert Txn.sender == self.admin, "Only admin"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // Only admin
+    // perpetuals_market.py:937
+    // assert min_operational.native >= 100_000, "Min 0.1 ALGO"
+    swap
+    btoi
+    dup
+    pushint 100000
+    >=
+    assert // Min 0.1 ALGO
+    // perpetuals_market.py:938
+    // assert reserve_target.native > min_operational.native, "Target > min"
+    swap
+    btoi
+    dup
+    dig 2
+    >
+    assert // Target > min
+    // perpetuals_market.py:940
+    // self.min_operational_balance = min_operational.native
+    bytec 19 // "min_operational_balance"
+    uncover 2
+    app_global_put
+    // perpetuals_market.py:941
+    // self.reserve_target = reserve_target.native
+    bytec 11 // "reserve_target"
+    swap
+    app_global_put
+    // perpetuals_market.py:920
+    // @abimethod()
+    bytec_0 // 0x151f7c7580
+    log
+    intc_1 // 1
+    return
+
+
+// perpetuals_market.PerpetualsMarket.calculate_pnl(is_long: bytes, entry_price: bytes, current_price: bytes, size: bytes) -> bytes:
+perpetuals_market.PerpetualsMarket.calculate_pnl:
+    // perpetuals_market.py:636-643
+    // @abimethod()
+    // def calculate_pnl(
+    //     self,
+    //     is_long: Bool,
+    //     entry_price: arc4.UInt64,
+    //     current_price: arc4.UInt64,
+    //     size: arc4.UInt64,
+    // ) -> PositionPnL:
+    proto 4 1
+    pushbytes ""
+    dupn 4
+    // perpetuals_market.py:656
+    // pnl = UInt64(0)
+    intc_0 // 0
+    // perpetuals_market.py:659
+    // if is_long.native:
+    frame_dig -4
+    intc_0 // 0
+    getbit
+    bz perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@5
+    // perpetuals_market.py:660-661
+    // # Long PnL = (current - entry) / entry * size
+    // if current_price.native >= entry_price.native:
+    frame_dig -2
+    btoi
+    dup
+    frame_bury 2
+    frame_dig -3
+    btoi
+    dup
+    cover 2
+    >=
+    bz perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@3
+    // perpetuals_market.py:662
+    // price_diff = current_price.native - entry_price.native
+    frame_dig 2
+    swap
+    -
+    frame_bury 1
+    // perpetuals_market.py:663
+    // is_profit = True
+    intc_1 // 1
+    frame_bury 0
+
+perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@9:
+    // perpetuals_market.py:676-678
+    // # Calculate PnL in ALGO
+    // # pnl = (price_diff * size) / entry_price
+    // if entry_price.native > 0:
+    frame_dig -3
+    btoi
+    dup
+    frame_bury 4
+    bz perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@11
+    // perpetuals_market.py:679
+    // pnl = (price_diff * size.native) // entry_price.native
+    frame_dig -1
+    btoi
+    frame_dig 1
+    *
+    frame_dig 4
+    /
+    frame_bury 5
+
+perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@11:
+    // perpetuals_market.py:682
+    // unrealized_pnl=arc4.UInt64(pnl),
+    frame_dig 5
+    itob
+    // perpetuals_market.py:683
+    // is_profit=Bool(is_profit),
+    bytec 5 // 0x00
+    intc_0 // 0
+    frame_dig 0
+    setbit
+    // perpetuals_market.py:681-688
+    // return PositionPnL(
+    //     unrealized_pnl=arc4.UInt64(pnl),
+    //     is_profit=Bool(is_profit),
+    //     funding_pnl=arc4.UInt64(0),
+    //     funding_is_positive=Bool(True),
+    //     liquidation_price=arc4.UInt64(0),
+    //     margin_ratio=arc4.UInt64(0),
+    // )
+    concat
+    pushbytes 0x00000000000000008000000000000000000000000000000000
+    concat
+    frame_bury 0
+    retsub
+
+perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@3:
+    // perpetuals_market.py:665
+    // price_diff = entry_price.native - current_price.native
+    frame_dig 2
+    -
+    frame_bury 1
+    // perpetuals_market.py:666
+    // is_profit = False
+    intc_0 // 0
+    frame_bury 0
+    b perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@9
+
+perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@5:
+    // perpetuals_market.py:668-669
+    // # Short PnL = (entry - current) / entry * size
+    // if entry_price.native >= current_price.native:
+    frame_dig -3
+    btoi
+    dup
+    frame_bury 3
+    frame_dig -2
+    btoi
+    dup
+    cover 2
+    >=
+    bz perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@7
+    // perpetuals_market.py:670
+    // price_diff = entry_price.native - current_price.native
+    frame_dig 3
+    swap
+    -
+    frame_bury 1
+    // perpetuals_market.py:671
+    // is_profit = True
+    intc_1 // 1
+    frame_bury 0
+    b perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@9
+
+perpetuals_market.PerpetualsMarket.calculate_pnl_else_body@7:
+    // perpetuals_market.py:673
+    // price_diff = current_price.native - entry_price.native
+    frame_dig 3
+    -
+    frame_bury 1
+    // perpetuals_market.py:674
+    // is_profit = False
+    intc_0 // 0
+    frame_bury 0
+    b perpetuals_market.PerpetualsMarket.calculate_pnl_after_if_else@9
+
+
+// perpetuals_market.PerpetualsMarket._route_fee(total_fee: uint64) -> uint64, uint64:
+_route_fee:
+    // perpetuals_market.py:946-947
+    // @subroutine
+    // def _route_fee(self, total_fee: UInt64) -> tuple[UInt64, UInt64]:
+    proto 1 2
+    // perpetuals_market.py:954
+    // current_balance = op.balance(Global.current_application_address)
+    global CurrentApplicationAddress
+    balance
+    dup
+    // perpetuals_market.py:958
+    // if current_balance < self.min_operational_balance:
+    intc_0 // 0
+    bytec 19 // "min_operational_balance"
+    app_global_get_ex
+    assert // check self.min_operational_balance exists
+    <
+    bz _route_fee_else_body@2
+    frame_dig -1
+
+_route_fee_after_if_else@6:
+    // perpetuals_market.py:968
+    // staking_fee = total_fee - operational_fee
+    frame_dig -1
+    dig 1
+    -
+    // perpetuals_market.py:970
+    // return operational_fee, staking_fee
+    uncover 2
+    retsub
+
+_route_fee_else_body@2:
+    // perpetuals_market.py:961
+    // elif current_balance < self.reserve_target:
+    intc_0 // 0
+    bytec 11 // "reserve_target"
+    app_global_get_ex
+    assert // check self.reserve_target exists
+    frame_dig 0
+    >
+    bz _route_fee_else_body@4
+    // perpetuals_market.py:962-963
+    // # BUILDING: 50/50 split
+    // operational_fee = (total_fee * self.building_operational_share) // 10000
+    intc_0 // 0
+    bytec 32 // "building_operational_share"
+    app_global_get_ex
+    assert // check self.building_operational_share exists
+    frame_dig -1
+    *
+    intc_3 // 10000
+    /
+    b _route_fee_after_if_else@6
+
+_route_fee_else_body@4:
+    // perpetuals_market.py:965-966
+    // # HEALTHY: 10% operational, 90% staking
+    // operational_fee = (total_fee * self.healthy_operational_share) // 10000
+    intc_0 // 0
+    bytec 33 // "healthy_operational_share"
+    app_global_get_ex
+    assert // check self.healthy_operational_share exists
+    frame_dig -1
+    *
+    intc_3 // 10000
+    /
+    b _route_fee_after_if_else@6
+
+
+// perpetuals_market.PerpetualsMarket._get_oracle_price() -> uint64:
+_get_oracle_price:
+    // perpetuals_market.py:975
+    // assert self.oracle_app_id > 0, "Oracle not configured"
+    intc_0 // 0
+    bytec 22 // "oracle_app_id"
+    app_global_get_ex
+    assert // check self.oracle_app_id exists
+    dup
+    assert // Oracle not configured
+    // perpetuals_market.py:976
+    // price, exists = op.AppGlobal.get_ex_uint64(self.oracle_app_id, b"current_price")
+    pushbytes 0x63757272656e745f7072696365
+    app_global_get_ex
+    // perpetuals_market.py:977
+    // assert exists, "Oracle price not available"
+    assert // Oracle price not available
+    // perpetuals_market.py:978
+    // assert price > 0, "Oracle price is zero"
+    dup
+    assert // Oracle price is zero
+    // perpetuals_market.py:979
+    // return price
+    retsub
+
+
+// perpetuals_market.PerpetualsMarket._calculate_liquidation_price(is_long: uint64, entry_price: uint64, collateral: uint64, size: uint64) -> uint64:
+_calculate_liquidation_price:
+    // perpetuals_market.py:981-988
+    // @subroutine
+    // def _calculate_liquidation_price(
+    //     self,
+    //     is_long: bool,
+    //     entry_price: UInt64,
+    //     collateral: UInt64,
+    //     size: UInt64,
+    // ) -> UInt64:
+    proto 4 1
+    pushbytes ""
+    dup
+    // perpetuals_market.py:1001
+    // if size == 0:
+    frame_dig -1
+    bnz _calculate_liquidation_price_after_if_else@2
+    // perpetuals_market.py:1002
+    // return UInt64(0)
+    intc_0 // 0
+    frame_bury 0
+    retsub
+
+_calculate_liquidation_price_after_if_else@2:
+    // perpetuals_market.py:1004-1005
+    // # Maintenance margin amount
+    // maint_amount = (size * self.maintenance_margin) // 10000
+    intc_0 // 0
+    bytec 12 // "maintenance_margin"
+    app_global_get_ex
+    assert // check self.maintenance_margin exists
+    frame_dig -1
+    *
+    intc_3 // 10000
+    /
+    dup
+    frame_bury 0
+    // perpetuals_market.py:1007
+    // if collateral <= maint_amount:
+    frame_dig -2
+    >=
+    bz _calculate_liquidation_price_after_if_else@4
+    // perpetuals_market.py:1008-1009
+    // # Already liquidatable
+    // return entry_price
+    frame_dig -3
+    frame_bury 0
+    retsub
+
+_calculate_liquidation_price_after_if_else@4:
+    // perpetuals_market.py:1011-1012
+    // # Buffer before liquidation
+    // buffer = collateral - maint_amount
+    frame_dig -2
+    frame_dig 0
+    -
+    // perpetuals_market.py:1014-1016
+    // # Price movement that triggers liquidation
+    // # price_change = (buffer * entry_price) / size
+    // price_change = (buffer * entry_price) // size
+    frame_dig -3
+    *
+    frame_dig -1
+    /
+    frame_bury 1
+    // perpetuals_market.py:1018
+    // if is_long:
+    frame_dig -4
+    bz _calculate_liquidation_price_else_body@8
+    // perpetuals_market.py:1019-1020
+    // # Long liquidates when price drops
+    // if entry_price > price_change:
+    frame_dig -3
+    frame_dig 1
+    >
+    bz _calculate_liquidation_price_else_body@7
+    // perpetuals_market.py:1021
+    // return entry_price - price_change
+    frame_dig -3
+    frame_dig 1
+    -
+    frame_bury 0
+    retsub
+
+_calculate_liquidation_price_else_body@7:
+    // perpetuals_market.py:1023
+    // return UInt64(1)  # Minimum price
+    intc_1 // 1
+    frame_bury 0
+    retsub
+
+_calculate_liquidation_price_else_body@8:
+    // perpetuals_market.py:1025-1026
+    // # Short liquidates when price rises
+    // return entry_price + price_change
+    frame_dig -3
+    frame_dig 1
+    +
+    frame_bury 0
+    retsub

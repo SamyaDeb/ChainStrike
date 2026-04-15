@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect, useCallback } from "react";
 import { useSafeWallet } from "@/hooks/useSafeWallet";
 import { getPerpPositions } from "@/services/contracts";
+import { usePerpsTrading } from "@/hooks/useTrading";
 
 interface PerpPositionWithPnL extends PerpPosition {
   currentPrice: number;
@@ -36,8 +37,15 @@ export function PerpPositionsPanel({
   const [positions, setPositions] = useState<PerpPositionWithPnL[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [closingPositionId, setClosingPositionId] = useState<number | null>(
+    null,
+  );
+  const [takeProfitPositionId, setTakeProfitPositionId] = useState<
+    number | null
+  >(null);
   const { activeAccount } = useSafeWallet();
   const activeAddress = activeAccount?.address;
+  const { closePosition, isLoading: tradingLoading } = usePerpsTrading();
 
   const fetchPositions = useCallback(async () => {
     if (propPositions) {
@@ -144,6 +152,102 @@ export function PerpPositionsPanel({
       localStorage.removeItem("chainstrike_perp_positions");
     }
     setRefreshKey((k) => k + 1);
+  };
+
+  const handleClosePosition = async (positionId: number) => {
+    if (!activeAddress) {
+      alert("Please connect your wallet");
+      return;
+    }
+
+    // Confirm close
+    if (!confirm("Are you sure you want to close this position?")) {
+      return;
+    }
+
+    setClosingPositionId(positionId);
+    try {
+      const result = await closePosition(positionId.toString());
+      if (result.success) {
+        console.log("Position closed successfully!", {
+          txId: result.txId,
+        });
+
+        // Clear cache and refresh positions
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("chainstrike_perp_positions");
+        }
+        setRefreshKey((k) => k + 1);
+
+        alert(`Position closed successfully! Transaction ID: ${result.txId}`);
+      } else {
+        console.error("Failed to close position:", result.error);
+        alert(`Failed to close position: ${result.error}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error("Error closing position:", errorMessage, err);
+      alert(`Error closing position: ${errorMessage}`);
+    } finally {
+      setClosingPositionId(null);
+    }
+  };
+
+  const handleTakeProfit = async (
+    positionId: number,
+    unrealizedPnL: number,
+  ) => {
+    if (!activeAddress) {
+      alert("Please connect your wallet");
+      return;
+    }
+
+    // Only allow take profit if position is profitable
+    if (unrealizedPnL <= 0) {
+      alert(
+        "Cannot take profit on a losing position. Current P&L is negative.",
+      );
+      return;
+    }
+
+    // Confirm take profit
+    if (
+      !confirm(
+        `Take profit and close this position? You will realize a profit of ${unrealizedPnL.toFixed(2)} ALGO.`,
+      )
+    ) {
+      return;
+    }
+
+    setTakeProfitPositionId(positionId);
+    try {
+      const result = await closePosition(positionId.toString());
+      if (result.success) {
+        console.log("Profit taken successfully!", {
+          txId: result.txId,
+          profit: unrealizedPnL,
+        });
+
+        // Clear cache and refresh positions
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("chainstrike_perp_positions");
+        }
+        setRefreshKey((k) => k + 1);
+
+        alert(
+          `Profit taken successfully! Realized ${unrealizedPnL.toFixed(2)} ALGO. Transaction ID: ${result.txId}`,
+        );
+      } else {
+        console.error("Failed to take profit:", result.error);
+        alert(`Failed to take profit: ${result.error}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error("Error taking profit:", errorMessage, err);
+      alert(`Error taking profit: ${errorMessage}`);
+    } finally {
+      setTakeProfitPositionId(null);
+    }
   };
 
   if (loading) {
@@ -320,20 +424,60 @@ export function PerpPositionsPanel({
               {selectedPosition === position.id && (
                 <div className="pt-3 border-t border-glass-border space-y-2">
                   <div className="grid grid-cols-3 gap-2">
-                    <Button size="sm" variant="secondary" className="gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="gap-1"
+                      disabled
+                    >
                       <Edit className="w-3 h-3" />
                       Add Margin
                     </Button>
-                    <Button size="sm" variant="secondary" className="gap-1">
-                      Take Profit
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="gap-1"
+                      onClick={() =>
+                        handleTakeProfit(position.id, position.unrealizedPnL)
+                      }
+                      disabled={
+                        closingPositionId === position.id ||
+                        takeProfitPositionId === position.id ||
+                        tradingLoading ||
+                        position.unrealizedPnL <= 0
+                      }
+                    >
+                      {takeProfitPositionId === position.id ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Closing...
+                        </>
+                      ) : (
+                        "Take Profit"
+                      )}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       className="gap-1 text-loss border-loss/50 hover:bg-loss/10"
+                      onClick={() => handleClosePosition(position.id)}
+                      disabled={
+                        closingPositionId === position.id ||
+                        takeProfitPositionId === position.id ||
+                        tradingLoading
+                      }
                     >
-                      <X className="w-3 h-3" />
-                      Close
+                      {closingPositionId === position.id ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Closing...
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-3 h-3" />
+                          Close
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>

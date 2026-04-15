@@ -8,7 +8,16 @@ import { useSafeWallet } from "@/hooks/useSafeWallet";
 import { PROTOCOL } from "@/config/contracts";
 import { getStrikeMultipliersForTimeframe } from "@/lib/options/strike-calculator";
 import { getPremiumQuote, type PremiumQuote } from "@/services/premium";
-import { TrendingUp, TrendingDown, Calendar, DollarSign, Wallet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+  Wallet,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
 
 interface OptionOrderFormProps {
   currentPrice: number;
@@ -23,47 +32,58 @@ interface OptionOrderFormProps {
   }) => void;
 }
 
-export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps) {
+export function OptionOrderForm({
+  currentPrice,
+  onSubmit,
+}: OptionOrderFormProps) {
   const { activeAccount } = useSafeWallet();
   const { buyOption, isLoading, error } = useOptionsTrading();
-  
-  const [optionType, setOptionType] = useState<OptionType>('call');
-  const [strike, setStrike] = useState('');
-  const [premium, setPremium] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [expirySeconds, setExpirySeconds] = useState(String(PROTOCOL.OPTIONS.MIN_EXPIRY));
-  const [lastTradeResult, setLastTradeResult] = useState<{ success: boolean; txId?: string; error?: string } | null>(null);
+
+  const [optionType, setOptionType] = useState<OptionType>("call");
+  const [strike, setStrike] = useState("");
+  const [premium, setPremium] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [expirySeconds, setExpirySeconds] = useState(
+    String(PROTOCOL.OPTIONS.MIN_EXPIRY),
+  );
+  const [lastTradeResult, setLastTradeResult] = useState<{
+    success: boolean;
+    txId?: string;
+    error?: string;
+  } | null>(null);
   const [isPremiumLoading, setIsPremiumLoading] = useState(false);
   const [premiumQuote, setPremiumQuote] = useState<PremiumQuote | null>(null);
 
   // Calculate strike price suggestions based on current price and option type
   // Uses volatility-based calculation for realistic strikes based on timeframe
   const getStrikeOptions = useCallback(() => {
-    const expiryTime = parseInt(expirySeconds, 10) || PROTOCOL.OPTIONS.MIN_EXPIRY;
-    
+    const expiryTime =
+      parseInt(expirySeconds, 10) || PROTOCOL.OPTIONS.MIN_EXPIRY;
+
     // Get volatility-based multipliers for this timeframe
-    const multipliers = getStrikeMultipliersForTimeframe(expiryTime, 0.80);
-    
+    const multipliers = getStrikeMultipliersForTimeframe(expiryTime, 0.8);
+
     return multipliers.map((mult) => {
       const price = currentPrice * mult;
       const percentDiff = Math.round((mult - 1) * 10000) / 100;
-      
+
       // Determine ITM/OTM status based on option type
-      let status: 'itm' | 'atm' | 'otm';
-      
+      let status: "itm" | "atm" | "otm";
+
       if (Math.abs(mult - 1.0) < 0.001) {
-        status = 'atm';
-      } else if (optionType === 'call') {
-        status = mult < 1 ? 'itm' : 'otm';
+        status = "atm";
+      } else if (optionType === "call") {
+        status = mult < 1 ? "itm" : "otm";
       } else {
-        status = mult > 1 ? 'itm' : 'otm';
+        status = mult > 1 ? "itm" : "otm";
       }
-      
-      const sign = percentDiff > 0 ? '+' : '';
-      const percentLabel = Math.abs(percentDiff) < 0.01 ? '' : `${sign}${percentDiff.toFixed(2)}%`;
+
+      const sign = percentDiff > 0 ? "+" : "";
+      const percentLabel =
+        Math.abs(percentDiff) < 0.01 ? "" : `${sign}${percentDiff.toFixed(2)}%`;
       const statusLabel = status.toUpperCase();
-      const label = `${price.toFixed(6)} (${percentLabel}${percentLabel ? ' ' : ''}${statusLabel})`;
-      
+      const label = `${price.toFixed(6)} (${percentLabel}${percentLabel ? " " : ""}${statusLabel})`;
+
       return {
         label,
         value: price.toFixed(6),
@@ -71,38 +91,41 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
       };
     });
   }, [currentPrice, expirySeconds, optionType]);
-  
+
   const strikeOptions = getStrikeOptions();
 
   const expiryOptions = [
-    { label: '1 Minute ⚡', value: '60' },
-    { label: '5 Minutes', value: '300' },
-    { label: '1 Hour', value: '3600' },
-    { label: '4 Hours', value: '14400' },
-    { label: '1 Day', value: '86400' },
-    { label: '3 Days', value: '259200' },
-    { label: '7 Days', value: '604800' },
-    { label: '14 Days', value: '1209600' },
-    { label: '30 Days', value: '2592000' },
+    { label: "1 Minute ⚡", value: "60" },
+    { label: "5 Minutes", value: "300" },
+    { label: "1 Hour", value: "3600" },
+    { label: "4 Hours", value: "14400" },
+    { label: "1 Day", value: "86400" },
+    { label: "3 Days", value: "259200" },
+    { label: "7 Days", value: "604800" },
+    { label: "14 Days", value: "1209600" },
+    { label: "30 Days", value: "2592000" },
   ];
 
   const EXPIRY_BUFFER_SECONDS = 10;
-  const selectedExpirySeconds = parseInt(expirySeconds, 10) || PROTOCOL.OPTIONS.MIN_EXPIRY;
+  const selectedExpirySeconds =
+    parseInt(expirySeconds, 10) || PROTOCOL.OPTIONS.MIN_EXPIRY;
   const estimatedSubmissionExpiryTimestamp =
-    Math.floor(Date.now() / 1000) + selectedExpirySeconds + EXPIRY_BUFFER_SECONDS;
-  
+    Math.floor(Date.now() / 1000) +
+    selectedExpirySeconds +
+    EXPIRY_BUFFER_SECONDS;
+
   // Fetch premium from on-chain contract (with client-side fallback)
   // Updates when strike, expiry, or option type changes
   useEffect(() => {
     if (!strike || !currentPrice || currentPrice <= 0) {
-      setPremium('');
+      setPremium("");
       setPremiumQuote(null);
       return;
     }
 
     const strikePrice = parseFloat(strike);
     if (isNaN(strikePrice) || strikePrice <= 0) {
-      setPremium('');
+      setPremium("");
       setPremiumQuote(null);
       return;
     }
@@ -112,9 +135,10 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
       setIsPremiumLoading(true);
       try {
         // Get premium quote for 1 ALGO unit (quantity-independent)
-        const quoteExpiryTimestamp = Math.floor(Date.now() / 1000) + selectedExpirySeconds;
+        const quoteExpiryTimestamp =
+          Math.floor(Date.now() / 1000) + selectedExpirySeconds;
         const quote = await getPremiumQuote({
-          isCall: optionType === 'call',
+          isCall: optionType === "call",
           currentPriceMicroUsd: Math.floor(currentPrice * 1_000_000),
           strikePriceMicroUsd: Math.floor(strikePrice * 1_000_000),
           expiryTimestamp: quoteExpiryTimestamp,
@@ -132,7 +156,7 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
           setPremiumQuote(null);
         }
       } catch (err) {
-        console.error('Error fetching premium:', err);
+        console.error("Error fetching premium:", err);
         // Fallback to minimum premium (per unit)
         const minPremiumPerUnit = currentPrice * 0.001;
         setPremium(minPremiumPerUnit.toFixed(6));
@@ -148,9 +172,12 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!activeAccount) {
-      setLastTradeResult({ success: false, error: 'Please connect your wallet first' });
+      setLastTradeResult({
+        success: false,
+        error: "Please connect your wallet first",
+      });
       return;
     }
 
@@ -159,7 +186,10 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
     const quantityAmount = parseInt(quantity);
 
     if (!strikePrice || !premiumAmount || !quantityAmount) {
-      setLastTradeResult({ success: false, error: 'Please fill in all fields with valid values' });
+      setLastTradeResult({
+        success: false,
+        error: "Please fill in all fields with valid values",
+      });
       return;
     }
 
@@ -168,25 +198,27 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
 
       // Build expiry from current time at submission to avoid stale timestamps
       const submissionExpiryTimestamp =
-        Math.floor(Date.now() / 1000) + selectedExpirySeconds + EXPIRY_BUFFER_SECONDS;
-      
+        Math.floor(Date.now() / 1000) +
+        selectedExpirySeconds +
+        EXPIRY_BUFFER_SECONDS;
+
       // Convert to contract format:
       // - strike: USD -> microUSD (multiply by 1,000,000)
-      // - quantity: ALGO contracts -> microALGO (multiply by 1,000,000)
+      // - quantity: number of contracts (NOT microALGO - keep as is)
       // - premium: ALGO (stays as ALGO, converted in hook)
       const result = await buyOption({
         optionType,
         strike: strikePrice * 1_000_000,
         expiryTimestamp: submissionExpiryTimestamp,
-        quantity: quantityAmount * 1_000_000,
+        quantity: quantityAmount,
         premium: premiumAmount,
       });
 
       setLastTradeResult(result);
-      
+
       if (result.success && onSubmit) {
         onSubmit({
-          type: 'option',
+          type: "option",
           optionType,
           strike: strikePrice,
           premium: premiumAmount,
@@ -195,17 +227,18 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
           txId: result.txId,
         });
       }
-      
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Transaction failed';
+      const errorMessage =
+        err instanceof Error ? err.message : "Transaction failed";
       setLastTradeResult({ success: false, error: errorMessage });
     }
   };
 
   const totalCost = (parseFloat(premium) || 0) * (parseInt(quantity) || 1);
-  const breakeven = optionType === 'call' 
-    ? (parseFloat(strike) || 0) + (parseFloat(premium) || 0)
-    : (parseFloat(strike) || 0) - (parseFloat(premium) || 0);
+  const breakeven =
+    optionType === "call"
+      ? (parseFloat(strike) || 0) + (parseFloat(premium) || 0)
+      : (parseFloat(strike) || 0) - (parseFloat(premium) || 0);
 
   return (
     <Card className="glass-card border-glass-border">
@@ -222,11 +255,11 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setOptionType('call')}
+              onClick={() => setOptionType("call")}
               className={`flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
-                optionType === 'call'
-                  ? 'bg-profit/10 text-profit border border-profit/20'
-                  : 'bg-dark-700 text-gray-300 hover:bg-dark-600 border border-glass-border'
+                optionType === "call"
+                  ? "bg-profit/10 text-profit border border-profit/20"
+                  : "bg-dark-700 text-gray-300 hover:bg-dark-600 border border-glass-border"
               }`}
             >
               <TrendingUp className="w-4 h-4" />
@@ -234,11 +267,11 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
             </button>
             <button
               type="button"
-              onClick={() => setOptionType('put')}
+              onClick={() => setOptionType("put")}
               className={`flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
-                optionType === 'put'
-                  ? 'bg-loss/10 text-loss border border-loss/20'
-                  : 'bg-dark-700 text-gray-300 hover:bg-dark-600 border border-glass-border'
+                optionType === "put"
+                  ? "bg-loss/10 text-loss border border-loss/20"
+                  : "bg-dark-700 text-gray-300 hover:bg-dark-600 border border-glass-border"
               }`}
             >
               <TrendingDown className="w-4 h-4" />
@@ -250,7 +283,9 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Strike Price */}
           <div>
-            <label className="block text-sm font-medium mb-2">Strike Price</label>
+            <label className="block text-sm font-medium mb-2">
+              Strike Price
+            </label>
             <input
               type="number"
               step="0.000001"
@@ -263,11 +298,11 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
             <div className="flex flex-wrap gap-1 mt-2">
               {strikeOptions.map((option) => {
                 const statusColors = {
-                  itm: 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30',
-                  atm: 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-300 border border-gray-500/30',
-                  otm: 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30',
+                  itm: "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30",
+                  atm: "bg-gray-500/20 hover:bg-gray-500/30 text-gray-300 border border-gray-500/30",
+                  otm: "bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30",
                 };
-                
+
                 return (
                   <button
                     key={option.value}
@@ -300,7 +335,10 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">
-              Expires (if submitted now): {new Date(estimatedSubmissionExpiryTimestamp * 1000).toLocaleString()}
+              Expires (if submitted now):{" "}
+              {new Date(
+                estimatedSubmissionExpiryTimestamp * 1000,
+              ).toLocaleString()}
             </p>
           </div>
 
@@ -326,18 +364,25 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
                 {premiumQuote.intrinsicValue !== undefined && (
                   <div className="flex justify-between">
                     <span>Intrinsic Value:</span>
-                    <span className="font-mono">{(premiumQuote.intrinsicValue / 1_000_000).toFixed(6)} ALGO</span>
+                    <span className="font-mono">
+                      {(premiumQuote.intrinsicValue / 1_000_000).toFixed(6)}{" "}
+                      ALGO
+                    </span>
                   </div>
                 )}
                 {premiumQuote.timeValue !== undefined && (
                   <div className="flex justify-between">
                     <span>Time Value:</span>
-                    <span className="font-mono">{(premiumQuote.timeValue / 1_000_000).toFixed(6)} ALGO</span>
+                    <span className="font-mono">
+                      {(premiumQuote.timeValue / 1_000_000).toFixed(6)} ALGO
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span>Delta:</span>
-                  <span className="font-mono">{(premiumQuote.delta / 10000).toFixed(2)}</span>
+                  <span className="font-mono">
+                    {(premiumQuote.delta / 10000).toFixed(2)}
+                  </span>
                 </div>
               </div>
             )}
@@ -345,7 +390,9 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
 
           {/* Quantity */}
           <div>
-            <label className="block text-sm font-medium mb-2">Quantity (ALGO)</label>
+            <label className="block text-sm font-medium mb-2">
+              Quantity (ALGO)
+            </label>
             <input
               type="number"
               min="1"
@@ -363,15 +410,21 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
             <div className="bg-dark-800 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Unit Premium</span>
-                <span className="font-mono">{(parseFloat(premium) || 0).toFixed(6)} ALGO</span>
+                <span className="font-mono">
+                  {(parseFloat(premium) || 0).toFixed(6)} ALGO
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Quantity</span>
-                <span className="font-mono">{(parseInt(quantity, 10) || 1).toLocaleString()} ALGO</span>
+                <span className="font-mono">
+                  {(parseInt(quantity, 10) || 1).toLocaleString()} ALGO
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Total Cost</span>
-                <span className="font-mono font-semibold">{totalCost.toFixed(6)} ALGO</span>
+                <span className="font-mono font-semibold">
+                  {totalCost.toFixed(6)} ALGO
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Breakeven Price</span>
@@ -379,7 +432,9 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Max Loss</span>
-                <span className="font-mono text-loss">{totalCost.toFixed(6)} ALGO</span>
+                <span className="font-mono text-loss">
+                  {totalCost.toFixed(6)} ALGO
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Max Profit</span>
@@ -390,11 +445,13 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
 
           {/* Transaction Result */}
           {lastTradeResult && (
-            <div className={`p-3 rounded-lg border flex items-start gap-2 ${
-              lastTradeResult.success 
-                ? 'bg-profit/10 border-profit/20 text-profit'
-                : 'bg-loss/10 border-loss/20 text-loss'
-            }`}>
+            <div
+              className={`p-3 rounded-lg border flex items-start gap-2 ${
+                lastTradeResult.success
+                  ? "bg-profit/10 border-profit/20 text-profit"
+                  : "bg-loss/10 border-loss/20 text-loss"
+              }`}
+            >
               {lastTradeResult.success ? (
                 <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               ) : (
@@ -403,15 +460,18 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
               <div className="text-sm">
                 {lastTradeResult.success ? (
                   <>
-                    <p className="font-medium">Option purchased successfully!</p>
+                    <p className="font-medium">
+                      Option purchased successfully!
+                    </p>
                     {lastTradeResult.txId && (
                       <p className="text-xs mt-1 opacity-80">
-                        Tx: {lastTradeResult.txId.slice(0, 8)}...{lastTradeResult.txId.slice(-8)}
+                        Tx: {lastTradeResult.txId.slice(0, 8)}...
+                        {lastTradeResult.txId.slice(-8)}
                       </p>
                     )}
                   </>
                 ) : (
-                  <p>{lastTradeResult.error || 'Transaction failed'}</p>
+                  <p>{lastTradeResult.error || "Transaction failed"}</p>
                 )}
               </div>
             </div>
@@ -432,7 +492,7 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
               Connect wallet to trade options
             </div>
           ) : (
-            <Button 
+            <Button
               type="submit"
               disabled={isLoading || !strike || !premium || !quantity}
               className="w-full gap-2"
@@ -446,7 +506,9 @@ export function OptionOrderForm({ currentPrice, onSubmit }: OptionOrderFormProps
               ) : (
                 <>
                   <DollarSign className="w-4 h-4" />
-                  Buy {optionType.charAt(0).toUpperCase() + optionType.slice(1)} Option
+                  Buy {optionType.charAt(0).toUpperCase() +
+                    optionType.slice(1)}{" "}
+                  Option
                 </>
               )}
             </Button>

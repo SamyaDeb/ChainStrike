@@ -250,6 +250,31 @@ function decodeArgToUint64(arg: Uint8Array | string): number {
   }
 }
 
+/**
+ * Decode ABI-encoded boolean from app call argument
+ * ABI booleans are encoded as single bytes: 0x80 = true, 0x00 = false
+ */
+function decodeArgToBool(arg: Uint8Array | string): boolean {
+  try {
+    let bytes: Uint8Array;
+    if (arg instanceof Uint8Array) {
+      bytes = arg;
+    } else if (typeof arg === "string") {
+      bytes = Uint8Array.from(atob(arg), (c) => c.charCodeAt(0));
+    } else {
+      return false;
+    }
+
+    // ABI boolean encoding: 0x80 = true, 0x00 = false
+    if (bytes.length > 0) {
+      return bytes[0] === 0x80;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function decodeArgToBytes(arg: Uint8Array | string): Uint8Array {
   if (arg instanceof Uint8Array) {
     return arg;
@@ -589,16 +614,15 @@ export async function getOptionPositions(
         if (gKey && processedGroups.has(gKey)) continue;
         if (gKey) processedGroups.add(gKey);
 
-        // Decode args: [method, type(1byte), strike(uint64), expiry(uint64), quantity(uint64)]
-        const optionTypeValue = decodeArgToUint64(args[1]);
+        // Decode args: [method, is_call(bool), strike(uint64), expiry(uint64), quantity(uint64)]
+        const isCall = decodeArgToBool(args[1]);
         const strikeRaw = decodeArgToUint64(args[2]);
         const expiryRaw = decodeArgToUint64(args[3]);
         const quantityRaw = decodeArgToUint64(args[4]);
 
-        const isCall = optionTypeValue === 1;
-        const strikePrice = strikeRaw / 10000; // Encoded as strike * 10000
+        const strikePrice = strikeRaw / 1_000_000; // Encoded in microUSD (6 decimals)
         const expiryTimestamp = expiryRaw;
-        const quantity = quantityRaw || 1;
+        const quantity = quantityRaw / 1_000_000; // Encoded in microALGO (6 decimals)
 
         // Extract optionId from transaction logs (ABI-encoded uint64 return value)
         const logs = txn.logs || txn["logs"] || [];

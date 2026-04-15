@@ -305,7 +305,7 @@ export function useOptionsTrading() {
       optionType: OptionType;
       strike: number; // in microUSD
       expiryTimestamp: number;
-      quantity: number; // in microALGO
+      quantity: number; // number of contracts (each contract = 1 ALGO)
       premium: number; // total premium in ALGO
     }): Promise<TradeResult> => {
       if (!activeAccount || !signTransactions) {
@@ -356,7 +356,7 @@ export function useOptionsTrading() {
         }
 
         const isCall = params.optionType === "call";
-        const sizeMicroAlgos = BigInt(params.quantity);
+        const sizeMicroAlgos = BigInt(params.quantity * 1_000_000); // Convert contracts to microALGO
         const strikePriceMicroUsd = BigInt(params.strike);
         const nowTimestamp = Math.floor(Date.now() / 1000);
 

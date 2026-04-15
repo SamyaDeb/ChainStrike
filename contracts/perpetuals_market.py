@@ -105,6 +105,7 @@ class PerpetualsMarket(ARC4Contract):
         self.perps_pool = Global.zero_address
         self.staking_contract = Global.zero_address
         self.oracle_app_id = UInt64(0)
+        self.perps_pool_app_id = UInt64(0)
 
         # Position tracking
         self.next_position_id = UInt64(1)
@@ -167,6 +168,7 @@ class PerpetualsMarket(ARC4Contract):
         perps_pool: Address,
         staking_contract: Address,
         oracle_app: arc4.UInt64,
+        perps_pool_app: arc4.UInt64,
     ) -> Bool:
         """
         Initialize market with contract references.
@@ -176,6 +178,7 @@ class PerpetualsMarket(ARC4Contract):
             perps_pool: Perpetuals pool contract address
             staking_contract: Staking contract for fees
             oracle_app: Oracle application ID for reading price
+            perps_pool_app: Perpetuals pool application ID for PnL calls
 
         Returns:
             Success status
@@ -186,6 +189,7 @@ class PerpetualsMarket(ARC4Contract):
         self.perps_pool = perps_pool.native
         self.staking_contract = staking_contract.native
         self.oracle_app_id = oracle_app.native
+        self.perps_pool_app_id = perps_pool_app.native
 
         return Bool(True)
 
@@ -387,11 +391,20 @@ class PerpetualsMarket(ARC4Contract):
             is_open=Bool(False),
         )
 
-        # Return funds to trader
+        # Process PnL and return funds through pool
+        # Pool handles the payout to trader if profitable
         if net_return > 0:
-            itxn.Payment(
-                receiver=pos.trader.native,
-                amount=net_return,
+            # Call pool's process_pnl method to handle trader payout
+            # For profit: pool pays trader
+            # For loss: collateral stays in pool (already transferred during open)
+            itxn.ApplicationCall(
+                app_id=Application(self.perps_pool_app_id),
+                app_args=(
+                    arc4.arc4_signature("process_pnl(uint64,bool,address)bool"),
+                    arc4.UInt64(net_return),
+                    arc4.Bool(is_profit),
+                    pos.trader,
+                ),
                 fee=Global.min_txn_fee,
             ).submit()
 
@@ -841,6 +854,13 @@ class PerpetualsMarket(ARC4Contract):
         assert maintenance.native >= 100, "Min 1% maintenance"
         self.initial_margin = initial.native
         self.maintenance_margin = maintenance.native
+        return Bool(True)
+
+    @abimethod()
+    def update_pool_app_id(self, pool_app_id: arc4.UInt64) -> Bool:
+        """Update pool application ID (for contract upgrades)."""
+        assert Txn.sender == self.admin, "Only admin"
+        self.perps_pool_app_id = pool_app_id.native
         return Bool(True)
 
     @abimethod()
