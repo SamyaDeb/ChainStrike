@@ -1,0 +1,103 @@
+generator client {
+  previewFeatures = ["multiSchema"]
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/settlement-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SETTLEMENT_DATABASE_URL")
+  schemas  = ["settlement", "public"]
+}
+
+// ─── Settlement Record ────────────────────────────────────────────────────────
+
+model Settlement {
+  id                   String           @id @default(uuid())
+  tradeId              String           @unique
+  asaId                Int
+  assetId              String
+  buyerUserId          String
+  sellerUserId         String
+  buyerWalletAddress   String
+  sellerWalletAddress  String
+  tokenAmount          BigInt
+  usdcAmount           BigInt
+  platformFee          BigInt
+  status               SettlementStatus @default(PENDING)
+  attempts             Int              @default(0)
+  lastAttemptAt        DateTime?
+  onChainTxId          String?
+  onChainGroupId       String?          // Algorand atomic group ID
+  confirmedRound       Int?
+  failureReason        String?
+  settledAt            DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  logs SettlementLog[]
+
+  @@index([status])
+  @@index([tradeId])
+  @@schema("settlement")
+}
+
+enum SettlementStatus {
+  PENDING
+  AWAITING_SIGNATURES   // Waiting for seller to sign
+  SUBMITTING            // TX group broadcast to Algorand
+  CONFIRMING            // Waiting for block confirmation
+  SETTLED
+  FAILED
+  CANCELLED
+
+  @@schema("settlement")
+}
+
+// ─── Settlement Log (each attempt) ───────────────────────────────────────────
+
+model SettlementLog {
+  id            String   @id @default(uuid())
+  settlementId  String
+  attempt       Int
+  action        String   // e.g. "tx_submitted", "signature_timeout", "confirmed"
+  txId          String?
+  error         String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  settlement Settlement @relation(fields: [settlementId], references: [id])
+
+  @@index([settlementId])
+  @@schema("settlement")
+}
+
+// ─── Escrow Hold ──────────────────────────────────────────────────────────────
+
+model EscrowHold {
+  id              String      @id @default(uuid())
+  orderId         String      @unique
+  userId          String
+  walletAddress   String
+  asaId           Int         // USDC ASA ID
+  amount          BigInt      // Locked USDC amount
+  lockTxId        String?     // Algorand TX that locked funds
+  status          EscrowStatus @default(LOCKED)
+  releasedAt      DateTime?
+  releaseTxId     String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@schema("settlement")
+}
+
+enum EscrowStatus {
+  LOCKED
+  RELEASED_SETTLED   // Funds sent to seller on trade settlement
+  RELEASED_CANCELLED // Funds returned to buyer on order cancellation
+  FAILED
+
+  @@schema("settlement")
+}

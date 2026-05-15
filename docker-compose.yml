@@ -1,0 +1,165 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ChainStrike — Local Development Infrastructure
+# Starts: PostgreSQL, Redis, Kafka (KRaft), Algorand LocalNet
+# Usage:  npm run docker:up
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  chainstrike:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  algod_data:
+  indexer_data:
+
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chainstrike_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chainstrike
+      POSTGRES_PASSWORD: chainstrike_dev_password
+      POSTGRES_DB: chainstrike
+    ports:
+      - '55432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U chainstrike -d chainstrike']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - chainstrike
+
+  # ── Redis 7 ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: chainstrike_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - chainstrike
+
+  # ── Kafka 3 (KRaft mode — no Zookeeper) ───────────────────────────────────
+  kafka:
+    image: apache/kafka:latest
+    container_name: chainstrike_kafka
+    restart: unless-stopped
+    ports:
+      - '9092:9092'
+      - '9093:9093'
+    environment:
+      # KRaft mode (no Zookeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 'chainstrike-kafka-cluster'
+    healthcheck:
+      test: ['CMD-SHELL', '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - chainstrike
+
+  # ── Kafka UI (dev tool) ────────────────────────────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: chainstrike_kafka_ui
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      KAFKA_CLUSTERS_0_NAME: localnet
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - chainstrike
+
+  # ── Algorand LocalNet (Algod + KMD) ───────────────────────────────────────
+  algod:
+    image: algorand/algod:stable
+    container_name: chainstrike_algod
+    restart: unless-stopped
+    ports:
+      - '4001:4001'
+      - '4002:4002'
+    environment:
+      DEV_MODE: 1
+      START_KMD: 1
+      TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    volumes:
+      - algod_data:/algod/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:4001/health || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks:
+      - chainstrike
+
+  # ── Algorand Indexer ──────────────────────────────────────────────────────
+  indexer:
+    image: algorand/indexer:latest
+    container_name: chainstrike_indexer
+    restart: unless-stopped
+    ports:
+      - '8980:8980'
+    environment:
+      INDEXER_POSTGRES_CONNECTION_STRING: host=postgres port=5432 user=chainstrike password=chainstrike_dev_password dbname=chainstrike sslmode=disable
+      INDEXER_ALGOD_ADDRESS: http://algod:4001
+      INDEXER_ALGOD_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    depends_on:
+      postgres:
+        condition: service_healthy
+      algod:
+        condition: service_healthy
+    networks:
+      - chainstrike
+
+  # ── pgAdmin (dev tool) ────────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: chainstrike_pgadmin
+    restart: unless-stopped
+    ports:
+      - '5050:80'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dev@chainstrike.io
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chainstrike

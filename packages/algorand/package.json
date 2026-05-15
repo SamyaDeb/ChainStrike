@@ -1,0 +1,29 @@
+{
+  "name": "@chainstrike/algorand",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@algorandfoundation/algokit-utils": "^9.2.0",
+    "algosdk": "^3.0.0",
+    "@chainstrike/types": "*",
+    "@chainstrike/config": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}

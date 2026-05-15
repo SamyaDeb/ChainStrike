@@ -1,0 +1,58 @@
+{
+  "name": "chainstrike",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*",
+    "contracts/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --concurrency=20",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\" --ignore-path .prettierignore",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "db:studio": "turbo run db:studio",
+    "docker:up": "docker compose -f docker-compose.testnet.yml up -d",
+    "docker:down": "docker compose -f docker-compose.testnet.yml down",
+    "docker:logs": "docker compose -f docker-compose.testnet.yml logs -f",
+    "docker:reset": "docker compose -f docker-compose.testnet.yml down -v",
+    "testnet": "./scripts/start-testnet.sh",
+    "deploy:contracts": "npx ts-node --esm scripts/deploy-contracts.ts",
+    "seed": "npx ts-node --esm scripts/seed-admin.ts",
+    "seed:testnet": "npx ts-node --esm scripts/seed-testnet.ts",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "dependencies": {
+    "@agoralabs-sh/avm-web-provider": "^1.7.0",
+    "@blockshake/defly-connect": "^1.2.1",
+    "@perawallet/connect": "^1.5.2",
+    "@walletconnect/modal": "^2.7.0",
+    "@walletconnect/sign-client": "^2.23.9",
+    "argon2": "^0.41.1",
+    "dotenv": "^16.4.5",
+    "lute-connect": "^1.7.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "ts-node": "^10.9.2",
+    "turbo": "^2.3.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.4"
+}

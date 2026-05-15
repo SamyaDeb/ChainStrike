@@ -1,0 +1,177 @@
+generator client {
+  previewFeatures = ["multiSchema"]
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/orderbook-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ORDERBOOK_DATABASE_URL")
+  schemas  = ["orderbook", "public"]
+}
+
+// ─── Market ───────────────────────────────────────────────────────────────────
+
+model Market {
+  id          String       @id @default(uuid())
+  assetId     String       @unique
+  asaId       Int          @unique
+  ticker      String       @unique
+  status      MarketStatus @default(PRE_MARKET)
+  // Price bands (set by Compliance Engine from oracle data)
+  referencePriceUsdc  BigInt?
+  upperPriceBand      BigInt?
+  lowerPriceBand      BigInt?
+  lastTradedPrice     BigInt?
+  volume24h           BigInt  @default(0)
+  // Circuit breaker state
+  circuitBreakerActive   Boolean  @default(false)
+  circuitBreakerUntil    DateTime?
+  openedAt            DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  orders Order[]
+
+  @@schema("orderbook")
+}
+
+enum MarketStatus {
+  PRE_MARKET
+  ACTIVE
+  SUSPENDED
+  CLOSED
+
+  @@schema("orderbook")
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id                String      @id @default(uuid())
+  marketId          String
+  userId            String
+  walletAddress     String
+  side              OrderSide
+  type              OrderType
+  timeInForce       TimeInForce @default(GTC)
+  price             BigInt?     // null for market orders. USDC microunits.
+  quantity          BigInt      // Token base units
+  filledQuantity    BigInt      @default(0)
+  remainingQuantity BigInt
+  status            OrderStatus @default(NEW)
+  rejectionReason   String?
+  escrowTxId        String?     // Algorand TX locking USDC in escrow
+  expiresAt         DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  market Market @relation(fields: [marketId], references: [id])
+  // Trades where this order was the buy side
+  buyTrades  Trade[] @relation("BuyOrder")
+  // Trades where this order was the sell side
+  sellTrades Trade[] @relation("SellOrder")
+
+  @@index([marketId, status, side, price])
+  @@index([userId])
+  @@index([createdAt])
+  @@schema("orderbook")
+}
+
+enum OrderSide {
+  BUY
+  SELL
+
+  @@schema("orderbook")
+}
+
+enum OrderType {
+  LIMIT
+  MARKET
+
+  @@schema("orderbook")
+}
+
+enum TimeInForce {
+  GTC  // Good Till Cancelled
+  IOC  // Immediate Or Cancel
+  FOK  // Fill Or Kill
+
+  @@schema("orderbook")
+}
+
+enum OrderStatus {
+  NEW
+  COMPLIANCE_CHECK
+  ACCEPTED
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  REJECTED
+  EXPIRED
+
+  @@schema("orderbook")
+}
+
+// ─── Trade ────────────────────────────────────────────────────────────────────
+
+model Trade {
+  id                   String      @id @default(uuid())
+  marketId             String
+  buyOrderId           String
+  sellOrderId          String
+  buyerUserId          String
+  sellerUserId         String
+  buyerWalletAddress   String
+  sellerWalletAddress  String
+  price                BigInt      // USDC microunits
+  quantity             BigInt      // Token base units
+  totalValue           BigInt      // price × quantity
+  platformFee          BigInt      // USDC microunits
+  feeRate              Decimal
+  status               TradeStatus @default(MATCHED)
+  settlementAttempts   Int         @default(0)
+  onChainTxId          String?
+  settledAt            DateTime?
+  failureReason        String?
+  matchedAt            DateTime    @default(now())
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  buyOrder  Order @relation("BuyOrder",  fields: [buyOrderId],  references: [id])
+  sellOrder Order @relation("SellOrder", fields: [sellOrderId], references: [id])
+
+  @@index([marketId])
+  @@index([status])
+  @@index([matchedAt])
+  @@schema("orderbook")
+}
+
+enum TradeStatus {
+  MATCHED
+  SETTLING
+  SETTLED
+  FAILED
+  CANCELLED
+
+  @@schema("orderbook")
+}
+
+// ─── OHLCV Bar (time-series) ──────────────────────────────────────────────────
+
+model OhlcvBar {
+  id        String   @id @default(uuid())
+  marketId  String
+  interval  String   // '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
+  timestamp DateTime // Start of the bar (UTC)
+  open      BigInt
+  high      BigInt
+  low       BigInt
+  close     BigInt
+  volume    BigInt
+  trades    Int
+
+  @@unique([marketId, interval, timestamp])
+  @@index([marketId, interval, timestamp])
+  @@schema("orderbook")
+}
