@@ -11,21 +11,22 @@ async function bootstrap() {
   const kCfg = kafkaConfig('notification');
 
   const app = await NestFactory.create(AppModule);
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.KAFKA,
-    options: {
-      client: {
-        brokers: kCfg.brokers,
-        clientId: kCfg.clientId,
+  if (process.env.KAFKA_ENABLED !== 'false') {
+    app.connectMicroservice<MicroserviceOptions>({
+      transport: Transport.KAFKA,
+      options: {
+        client: {
+          brokers: kCfg.brokers,
+          clientId: kCfg.clientId,
+        },
+        consumer: {
+          groupId: kCfg.consumerGroup,
+          allowAutoTopicCreation: true,
+        },
       },
-      consumer: {
-        groupId: kCfg.consumerGroup,
-        allowAutoTopicCreation: true,
-      },
-    },
-  });
-
-  await app.startAllMicroservices();
+    });
+    await app.startAllMicroservices();
+  }
   const port = process.env.NOTIFICATION_PORT ?? 3006;
   await app.listen(port);
   logger.info(`Notification service listening on port ${port}`);
