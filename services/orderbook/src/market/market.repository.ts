@@ -89,7 +89,12 @@ export class MarketRepository {
       .sort(([a], [b]) => a - b)
       .slice(-limit)
       .map(([ts, b]) => ({
-        t: ts, o: b.o.toString(), h: b.h.toString(), l: b.l.toString(), c: b.c.toString(), v: b.v.toString(),
+        openTime: ts,
+        open: b.o.toString(),
+        high: b.h.toString(),
+        low: b.l.toString(),
+        close: b.c.toString(),
+        volume: b.v.toString(),
       }));
   }
 
