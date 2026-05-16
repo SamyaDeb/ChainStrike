@@ -105,17 +105,17 @@ export async function getAsaInfo(algod: algosdk.Algodv2, asaId: number): Promise
   return {
     asaId,
     name: p.name ?? '',
-    unitName: p['unit-name'] ?? '',
+    unitName: p.unitName ?? p['unit-name'] ?? '',
     total: BigInt(p.total),
     decimals: p.decimals,
-    defaultFrozen: p['default-frozen'] ?? false,
+    defaultFrozen: p.defaultFrozen ?? p['default-frozen'] ?? false,
     creator: p.creator,
     manager: p.manager,
     reserve: p.reserve,
     freeze: p.freeze,
     clawback: p.clawback,
     url: p.url,
-    metadataHash: p['metadata-hash']
+    metadataHash: p.metadataHash ? Buffer.from(p.metadataHash as Uint8Array).toString('hex') : p['metadata-hash']
       ? Buffer.from(p['metadata-hash']).toString('hex')
       : undefined,
   };
@@ -130,7 +130,8 @@ export async function hasOptedIn(
 ): Promise<boolean> {
   try {
     const info = await algod.accountAssetInformation(address, asaId).do();
-    return info['asset-holding'] !== undefined;
+    // algosdk v3: assetHolding (camelCase); v2: asset-holding (kebab)
+    return (info.assetHolding ?? info['asset-holding']) !== undefined;
   } catch {
     return false;
   }
@@ -145,7 +146,9 @@ export async function getTokenBalance(
 ): Promise<bigint> {
   try {
     const info = await algod.accountAssetInformation(address, asaId).do();
-    return BigInt(info['asset-holding']?.amount ?? 0);
+    // algosdk v3: assetHolding (camelCase); v2: asset-holding (kebab)
+    const holding = info.assetHolding ?? info['asset-holding'];
+    return BigInt(holding?.amount ?? 0);
   } catch {
     return 0n;
   }

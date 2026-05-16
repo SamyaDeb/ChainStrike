@@ -4,10 +4,13 @@ import { SettlementTxGroup } from '@chainstrike/types';
 // ─────────────────────────────────────────────────────────────────────────────
 // Atomic Settlement Transaction Group
 //
-// Group structure:
-//   Txn 0 — ASA transfer: seller → buyer (token)         [seller signs]
-//   Txn 1 — USDC transfer: admin → seller (payment)      [admin signs — custodial]
-//   Txn 2 — USDC transfer: admin → treasury (fee)        [admin signs — custodial]
+// RWA tokens are created with defaultFrozen=true and admin as clawback address.
+// Regular transfers are rejected by Algorand for frozen assets.
+// All transactions are signed by the admin (platform custodian):
+//
+//   Txn 0 — ASA clawback: admin revokes tokens from seller → buyer [admin signs]
+//   Txn 1 — USDC transfer: admin → seller (payment from buyer's locked USDC) [admin signs]
+//   Txn 2 — USDC transfer: admin → treasury (fee)                           [admin signs]
 //
 // Optional (with settlement contract deployed):
 //   + Txn 3 — App call: settlement contract records trade event on-chain [admin signs]
@@ -25,12 +28,15 @@ export function buildSettlementGroup(
     JSON.stringify({ platform: 'chainstrike', tradeId: params.tradeId }),
   );
 
-  // Txn 0: Token transfer — seller sends RWA tokens to buyer
+  // Txn 0: Clawback token transfer — admin (clawback authority) moves RWA tokens
+  // from seller's frozen holding to buyer. Required because defaultFrozen=true.
+  // In algosdk v3, assetSender = the account being clawed from (seller).
   const tokenTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-    sender: params.sellerAddress,
+    sender: params.adminAddress,
     receiver: params.buyerAddress,
     assetIndex: params.asaId,
     amount: params.tokenAmount,
+    assetSender: params.sellerAddress,
     suggestedParams,
     note,
   });

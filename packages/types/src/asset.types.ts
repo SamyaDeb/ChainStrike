@@ -10,6 +10,8 @@ export type AssetCategory =
   | 'commodity'
   | 'private_equity';
 
+export type IssuanceEscrowStatus = 'PENDING' | 'RELEASED_TO_VAULT' | 'RETURNED_TO_ISSUER';
+
 export type AssetStatus =
   | 'draft'
   | 'submitted'
@@ -42,8 +44,6 @@ export interface Asset {
   totalSupply: bigint;
   decimals: number;
   tokenizationRatio: string;    // Human-readable e.g. "1 token = 1 gram gold"
-  minimumInvestment: bigint;    // In USDC microunits (6 decimals)
-
   // Custody
   custodianName: string;
   custodianJurisdiction: ISO3166Alpha2;
@@ -58,6 +58,12 @@ export interface Asset {
   minimumKycTier: number;       // 1, 2, or 3
   accreditedInvestorRequired: boolean;
   lockupDays: number;           // 0 = no lockup
+
+  // Issuance liquidity escrow — on-chain USDC hold during verification pipeline
+  issuanceEscrowStatus?: IssuanceEscrowStatus;
+  issuanceEscrowAmount?: bigint;
+  issuanceEscrowTxId?: string;
+  issuanceEscrowReleaseTxId?: string;
 
   verificationStatus: VerificationStatus;
   listedAt?: Date;
