@@ -5,6 +5,7 @@ import { MarketService } from '../market/market.service';
 import { MarketRepository } from '../market/market.repository';
 import { PrismaService } from '../prisma/prisma.service';
 import { InMemoryOrderBookStore } from '../orderbook/in-memory-order-book.store';
+import { MatchingService } from '../matching/matching.service';
 
 interface SignRequestPayload {
   tradeId: string;
@@ -23,6 +24,7 @@ export class InternalController {
     private readonly marketRepo: MarketRepository,
     private readonly prisma: PrismaService,
     private readonly bookStore: InMemoryOrderBookStore,
+    private readonly matchingService: MatchingService,
   ) {}
 
   // ─── Called by Asset Service when ASA is deployed ────────────────────────────
@@ -146,18 +148,47 @@ export class InternalController {
   }
 
   // ─── Called by Settlement Service when settlement fails ──────────────────────
+  // Restores order quantities so the book shows accurate available supply.
 
   @Post('trades/failed')
   async tradeFailed(@Body() payload: { tradeId: string; reason?: string }) {
-    this.logger.log(`Trade settlement failed: ${payload.tradeId}`);
+    this.logger.log(`Trade settlement failed: ${payload.tradeId} — rolling back order quantities`);
     try {
-      await this.prisma.trade.update({
-        where: { id: payload.tradeId },
-        data: { status: 'FAILED', failureReason: payload.reason } as any,
-      });
+      const trade = await this.prisma.trade.findUnique({ where: { id: payload.tradeId } });
+      if (!trade || (trade as any).status === 'SETTLED') return { success: true };
+
+      await this.prisma.$transaction([
+        this.prisma.trade.update({
+          where: { id: payload.tradeId },
+          data: { status: 'FAILED', failureReason: payload.reason } as any,
+        }),
+        this.prisma.order.update({
+          where: { id: trade.sellOrderId },
+          data: {
+            remainingQuantity: { increment: trade.quantity },
+            filledQuantity: { decrement: trade.quantity },
+            status: 'ACCEPTED',
+          } as any,
+        }),
+        this.prisma.order.update({
+          where: { id: trade.buyOrderId },
+          data: {
+            remainingQuantity: { increment: trade.quantity },
+            filledQuantity: { decrement: trade.quantity },
+            status: 'ACCEPTED',
+          } as any,
+        }),
+      ]);
+
+      // Restore in-memory orderbook (sell side only — buy order stays in book)
+      const market = await this.prisma.market.findUnique({ where: { id: trade.marketId } });
+      if (market) {
+        this.matchingService.restoreOrderQuantity(market.assetId, trade.sellOrderId, trade.quantity);
+      }
+
       return { success: true };
     } catch (err) {
-      this.logger.error(`Failed to update trade failed: ${(err as Error).message}`);
+      this.logger.error(`Failed to rollback trade ${payload.tradeId}: ${(err as Error).message}`);
       return { success: false };
     }
   }
