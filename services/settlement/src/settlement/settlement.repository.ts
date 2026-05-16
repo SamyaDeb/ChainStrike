@@ -20,7 +20,13 @@ export class SettlementRepository {
     platformFee: bigint;
     status: SettlementStatus;
   }) {
-    return this.prisma.settlement.create({ data });
+    // Use upsert so re-triggered settlements (retry cron) reuse the existing record
+    // instead of failing with a unique constraint on tradeId.
+    return this.prisma.settlement.upsert({
+      where: { tradeId: data.tradeId },
+      create: data,
+      update: { status: data.status, failureReason: null },
+    });
   }
 
   async findById(id: string) {
