@@ -41,8 +41,8 @@ export class OrderService {
       throw new BadRequestException('Limit orders require a price');
     }
 
-    // Price band check for limit orders (skipped in dev mode)
-    const skipPriceBand = process.env['NODE_ENV'] === 'development' || process.env['DEV_SKIP_PRICE_BAND'] === 'true';
+    // Price band check for limit orders
+    const skipPriceBand = process.env['DEV_SKIP_PRICE_BAND'] === 'true';
     if (price && market.referencePriceUsdc && !skipPriceBand) {
       const refPrice = BigInt(market.referencePriceUsdc);
       const bandPct = BigInt(Math.floor(PlatformConstants.PRICE_BAND_PCT * 100));
@@ -56,24 +56,23 @@ export class OrderService {
     // ─── Escrow verification for BUY orders ──────────────────────────────────────
     let escrowTxId: string | undefined;
     if (dto.side === 'BUY') {
-      const skipEscrow = process.env['DEV_SKIP_USDC_PAYMENT'] === 'true';
-      if (!skipEscrow) {
-        if (!dto.escrowTxId) {
-          throw new BadRequestException('BUY orders require an escrow lock transaction ID');
-        }
-        const expectedUsdc = ((price ?? market.lastTradedPrice ?? 0n) * quantity) / 1_000_000n;
-        const verified = await this.escrowService.verifyEscrowLock(
-          dto.escrowTxId,
-          dto.walletAddress,
-          expectedUsdc,
-        );
-        if (!verified) {
-          throw new BadRequestException('Escrow lock verification failed — ensure USDC was sent to escrow contract');
-        }
-        escrowTxId = dto.escrowTxId;
-      } else {
-        this.logger.log('DEV_SKIP_USDC_PAYMENT: skipping escrow verification for BUY order');
+      if (!dto.escrowTxId) {
+        throw new BadRequestException('BUY orders require an escrow lock transaction ID');
       }
+      const referencePrice = price ?? market.lastTradedPrice ?? market.referencePriceUsdc;
+      if (!referencePrice) {
+        throw new BadRequestException('Cannot place market order: no reference price available');
+      }
+      const expectedUsdc = (referencePrice * quantity) / 1_000_000n;
+      const verified = await this.escrowService.verifyEscrowLock(
+        dto.escrowTxId,
+        dto.walletAddress,
+        expectedUsdc,
+      );
+      if (!verified) {
+        throw new BadRequestException('Escrow lock verification failed — ensure USDC was sent to escrow contract');
+      }
+      escrowTxId = dto.escrowTxId;
     }
 
     // Pre-trade compliance check (calls Compliance Service via HTTP)

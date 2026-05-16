@@ -1,10 +1,12 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InMemoryOrderBookStore, BookEntry } from '../orderbook/in-memory-order-book.store';
 import { OrderbookGateway } from '../gateway/orderbook.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomUUID } from 'crypto';
 import axios from 'axios';
+import { Mutex } from 'async-mutex';
 
 export interface MatchResult {
   tradeId: string;
@@ -28,6 +30,7 @@ export class MatchingService implements OnApplicationBootstrap {
   private readonly logger = new Logger(MatchingService.name);
   private readonly settlementServiceUrl: string;
   private readonly feeRate = 0.0025;
+  private readonly assetLocks = new Map<string, Mutex>();
 
   constructor(
     private readonly bookStore: InMemoryOrderBookStore,
@@ -39,6 +42,13 @@ export class MatchingService implements OnApplicationBootstrap {
       'SETTLEMENT_SERVICE_URL',
       'http://localhost:3005',
     );
+  }
+
+  private getLock(assetId: string): Mutex {
+    if (!this.assetLocks.has(assetId)) {
+      this.assetLocks.set(assetId, new Mutex());
+    }
+    return this.assetLocks.get(assetId)!;
   }
 
   // ─── Hydrate in-memory book from DB on startup ───────────────────────────────
@@ -82,98 +92,104 @@ export class MatchingService implements OnApplicationBootstrap {
 
   // ─── Process incoming order: add to book, match, persist, settle ─────────────
   async processOrder(entry: BookEntry): Promise<MatchResult[]> {
-    this.bookStore.addOrder(entry);
+    // Use per-asset lock to prevent double-fills
+    const release = await this.getLock(entry.assetId).acquire();
+    try {
+      this.bookStore.addOrder(entry);
 
-    const matches = await this.match(entry);
+      const matches = await this.match(entry);
 
-    const depth = this.bookStore.getDepth(entry.assetId, 20);
-    this.gateway.broadcastOrderbookUpdate(entry.assetId, depth);
+      const depth = this.bookStore.getDepth(entry.assetId, 20);
+      this.gateway.broadcastOrderbookUpdate(entry.assetId, depth);
 
-    for (const match of matches) {
-      const totalValue = match.price * match.quantity / 1_000_000n;
-      const platformFee = BigInt(Math.floor(Number(totalValue) * this.feeRate));
+      for (const match of matches) {
+        const totalValue = match.price * match.quantity / 1_000_000n;
+        const platformFee = BigInt(Math.floor(Number(totalValue) * this.feeRate));
 
-      // Persist trade record + update order statuses — settlement callback needs this
-      try {
-        await this.prisma.trade.create({
-          data: {
-            id: match.tradeId,
-            marketId: match.marketId,
+        // Persist trade record + update order statuses — settlement callback needs this
+        try {
+          // Wrap all DB writes in a transaction
+          await this.prisma.$transaction([
+            this.prisma.trade.create({
+              data: {
+                id: match.tradeId,
+                marketId: match.marketId,
+                buyOrderId: match.buyOrderId,
+                sellOrderId: match.sellOrderId,
+                buyerUserId: match.buyerUserId,
+                sellerUserId: match.sellerUserId,
+                buyerWalletAddress: match.buyerWalletAddress,
+                sellerWalletAddress: match.sellerWalletAddress,
+                price: match.price,
+                quantity: match.quantity,
+                totalValue,
+                platformFee,
+                feeRate: this.feeRate,
+                status: 'MATCHED',
+              } as any,
+            }),
+            this.prisma.order.update({
+              where: { id: match.buyOrderId },
+              data: {
+                remainingQuantity: match.buyNewRemaining,
+                filledQuantity: { increment: match.quantity },
+                status: match.buyNewRemaining <= 0n ? 'FILLED' : 'PARTIALLY_FILLED',
+              } as any,
+            }),
+            this.prisma.order.update({
+              where: { id: match.sellOrderId },
+              data: {
+                remainingQuantity: match.sellNewRemaining,
+                filledQuantity: { increment: match.quantity },
+                status: match.sellNewRemaining <= 0n ? 'FILLED' : 'PARTIALLY_FILLED',
+              } as any,
+            }),
+            this.prisma.market.update({
+              where: { id: match.marketId },
+              data: { lastTradedPrice: match.price } as any,
+            }),
+          ]);
+        } catch (dbErr) {
+          this.logger.error(`DB write failed for trade ${match.tradeId}: ${(dbErr as Error).message}`);
+        }
+
+        // Call settlement service (fire: it responds immediately now and processes async)
+        try {
+          await axios.post(`${this.settlementServiceUrl}/internal/settle`, {
+            tradeId: match.tradeId,
+            assetId: match.assetId,
+            asaId: match.asaId,
             buyOrderId: match.buyOrderId,
             sellOrderId: match.sellOrderId,
             buyerUserId: match.buyerUserId,
             sellerUserId: match.sellerUserId,
             buyerWalletAddress: match.buyerWalletAddress,
             sellerWalletAddress: match.sellerWalletAddress,
-            price: match.price,
-            quantity: match.quantity,
-            totalValue,
-            platformFee,
-            feeRate: this.feeRate,
-            status: 'MATCHED',
-          } as any,
-        });
+            tokenAmount: match.quantity.toString(),
+            usdcAmount: totalValue.toString(),
+            platformFee: platformFee.toString(),
+            price: match.price.toString(),
+          }, { timeout: 5000 });
 
-        await this.prisma.order.update({
-          where: { id: match.buyOrderId },
-          data: {
-            remainingQuantity: match.buyNewRemaining,
-            filledQuantity: { increment: match.quantity },
-            status: match.buyNewRemaining <= 0n ? 'FILLED' : 'PARTIALLY_FILLED',
-          } as any,
-        });
+          this.gateway.broadcastTrade(entry.assetId, {
+            price: match.price.toString(),
+            quantity: match.quantity.toString(),
+            side: entry.side === 'buy' ? 'BUY' : 'SELL',
+            timestamp: new Date().toISOString(),
+          });
 
-        await this.prisma.order.update({
-          where: { id: match.sellOrderId },
-          data: {
-            remainingQuantity: match.sellNewRemaining,
-            filledQuantity: { increment: match.quantity },
-            status: match.sellNewRemaining <= 0n ? 'FILLED' : 'PARTIALLY_FILLED',
-          } as any,
-        });
-
-        await this.prisma.market.update({
-          where: { id: match.marketId },
-          data: { lastTradedPrice: match.price } as any,
-        });
-      } catch (dbErr) {
-        this.logger.error(`DB write failed for trade ${match.tradeId}: ${(dbErr as Error).message}`);
+          this.logger.log(
+            `Trade matched + settlement triggered: ${match.tradeId} | ${match.quantity} @ ${match.price} | buy=${match.buyOrderId} sell=${match.sellOrderId}`,
+          );
+        } catch (err) {
+          this.logger.error(`Settlement call failed for trade ${match.tradeId}: ${(err as Error).message}`);
+        }
       }
 
-      // Call settlement service (fire: it responds immediately now and processes async)
-      try {
-        await axios.post(`${this.settlementServiceUrl}/internal/settle`, {
-          tradeId: match.tradeId,
-          assetId: match.assetId,
-          asaId: match.asaId,
-          buyOrderId: match.buyOrderId,
-          sellOrderId: match.sellOrderId,
-          buyerUserId: match.buyerUserId,
-          sellerUserId: match.sellerUserId,
-          buyerWalletAddress: match.buyerWalletAddress,
-          sellerWalletAddress: match.sellerWalletAddress,
-          tokenAmount: match.quantity.toString(),
-          usdcAmount: totalValue.toString(),
-          platformFee: platformFee.toString(),
-          price: match.price.toString(),
-        }, { timeout: 5000 });
-
-        this.gateway.broadcastTrade(entry.assetId, {
-          price: match.price.toString(),
-          quantity: match.quantity.toString(),
-          side: entry.side === 'buy' ? 'BUY' : 'SELL',
-          timestamp: new Date().toISOString(),
-        });
-
-        this.logger.log(
-          `Trade matched + settlement triggered: ${match.tradeId} | ${match.quantity} @ ${match.price} | buy=${match.buyOrderId} sell=${match.sellOrderId}`,
-        );
-      } catch (err) {
-        this.logger.error(`Settlement call failed for trade ${match.tradeId}: ${(err as Error).message}`);
-      }
+      return matches;
+    } finally {
+      release();
     }
-
-    return matches;
   }
 
   private async match(incoming: BookEntry): Promise<MatchResult[]> {
@@ -228,9 +244,18 @@ export class MatchingService implements OnApplicationBootstrap {
     const incomingEntry = this.bookStore.getEntry(incoming.assetId, incoming.side, incoming.orderId);
     if (incomingEntry && incomingEntry.remainingQuantity > 0n) {
       if (incoming.timeInForce === 'IOC') {
+        // IOC: cancel unfilled remainder
         this.bookStore.removeOrder(incoming.assetId, incoming.side, incoming.orderId);
-      } else if (incoming.timeInForce === 'FOK' && matches.length === 0) {
+      } else if (incoming.timeInForce === 'FOK') {
+        // FOK: if not fully filled, cancel and rollback all partial fills
         this.bookStore.removeOrder(incoming.assetId, incoming.side, incoming.orderId);
+        // Restore quantities for all resting orders that were partially consumed
+        for (const match of matches) {
+          const oppSide = incoming.side === 'buy' ? 'sell' : 'buy';
+          this.bookStore.restoreQuantity(incoming.assetId, oppSide, match.sellOrderId, match.quantity);
+        }
+        // Return empty matches — order is cancelled
+        return [];
       }
     }
 
@@ -241,6 +266,37 @@ export class MatchingService implements OnApplicationBootstrap {
     this.bookStore.removeOrderBothSides(assetId, orderId);
     const depth = this.bookStore.getDepth(assetId, 20);
     this.gateway.broadcastOrderbookUpdate(assetId, { assetId, ...depth });
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async retryOrphanedSettlements(): Promise<void> {
+    const cutoff = new Date(Date.now() - 30_000); // 30s old
+    const orphaned = await this.prisma.trade.findMany({
+      where: {
+        status: 'MATCHED',
+        createdAt: { lt: cutoff },
+        settlementAttempts: { lt: 5 },
+      },
+    });
+
+    for (const trade of orphaned) {
+      try {
+        await this.prisma.trade.update({
+          where: { id: trade.id },
+          data: { settlementAttempts: { increment: 1 } },
+        });
+        await axios.post(`${this.settlementServiceUrl}/internal/settle`, {
+          tradeId: trade.id,
+          assetId: trade.assetId,
+          buyOrderId: trade.buyOrderId,
+          sellOrderId: trade.sellOrderId,
+          price: trade.price.toString(),
+          quantity: trade.quantity.toString(),
+        }, { timeout: 5000 });
+      } catch (err) {
+        this.logger.warn(`Settlement retry failed for trade ${trade.id}: ${(err as Error).message}`);
+      }
+    }
   }
 
   private pricesCross(incoming: BookEntry, opposing: BookEntry): boolean {

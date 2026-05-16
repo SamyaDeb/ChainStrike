@@ -55,6 +55,12 @@ export class InMemoryOrderBookStore {
     if (entry) entry.remainingQuantity -= by;
   }
 
+  restoreQuantity(assetId: string, side: 'buy' | 'sell', orderId: string, by: bigint): void {
+    const book = this.getBook(assetId, side);
+    const entry = book.find((e) => e.orderId === orderId);
+    if (entry) entry.remainingQuantity += by;
+  }
+
   removeOrder(assetId: string, side: 'buy' | 'sell', orderId: string): void {
     const book = this.getBook(assetId, side);
     const idx = book.findIndex((e) => e.orderId === orderId);

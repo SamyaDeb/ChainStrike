@@ -29,6 +29,7 @@ export class MarketService {
     return this.marketRepo.updateStatus(market.id, 'ACTIVE');
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
   async checkCircuitBreakers() {
     const markets = await this.prisma.market.findMany({
       where: { status: 'ACTIVE', circuitBreakerActive: false },

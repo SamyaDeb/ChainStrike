@@ -55,33 +55,24 @@ export class MarketRepository {
     const market = await this.prisma.market.findUnique({ where: { assetId } });
     if (!market) return [];
 
-    const refPrice = Number(market.referencePriceUsdc ?? 10_000_000n);
-
-    // Build OHLCV from settled trades; fall back to synthetic candles when no trades yet
-    const trades = await this.prisma.order.findMany({
-      where: { marketId: market.id, status: 'FILLED' },
+    // Build OHLCV from Trade records (actual executed trades)
+    const trades = await this.prisma.trade.findMany({
+      where: { marketId: market.id, status: { in: ['MATCHED', 'SETTLED'] } },
       orderBy: { createdAt: 'asc' },
-      select: { price: true, filledQuantity: true, createdAt: true },
+      select: { price: true, quantity: true, createdAt: true },
     });
 
     if (trades.length === 0) {
-      // Return synthetic flat candles so the chart renders
-      const buckets: Array<{ t: number; o: string; h: string; l: string; c: string; v: string }> = [];
-      for (let i = limit - 1; i >= 0; i--) {
-        const ts = Date.now() - i * this.intervalMs(interval);
-        const jitter = (Math.random() - 0.5) * refPrice * 0.02;
-        const p = (refPrice + jitter).toFixed(0);
-        buckets.push({ t: ts, o: p, h: p, l: p, c: p, v: '0' });
-      }
-      return buckets;
+      // No trades yet — return empty array (no synthetic data)
+      return [];
     }
 
     const msPerBucket = this.intervalMs(interval);
     const bucketMap = new Map<number, { o: bigint; h: bigint; l: bigint; c: bigint; v: bigint }>();
 
     for (const t of trades) {
-      const price = t.price ?? 0n;
-      const vol = t.filledQuantity ?? 0n;
+      const price = t.price;
+      const vol = t.quantity;
       const bucket = Math.floor(t.createdAt.getTime() / msPerBucket) * msPerBucket;
       const existing = bucketMap.get(bucket);
       if (!existing) {
