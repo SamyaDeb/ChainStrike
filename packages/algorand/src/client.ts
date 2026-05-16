@@ -30,28 +30,11 @@ export async function waitForConfirmation(
   algod: algosdk.Algodv2,
   txId: string,
   maxRounds = 5,
-): Promise<algosdk.modelsv2.PendingTransactionResponse> {
-  const status = await algod.status().do();
-  let lastRound = status['last-round'];
-
-  while (true) {
-    const pendingInfo = await algod.pendingTransactionInformation(txId).do();
-
-    if (pendingInfo['confirmed-round'] && pendingInfo['confirmed-round'] > 0) {
-      return pendingInfo;
-    }
-
-    if (pendingInfo['pool-error'] && pendingInfo['pool-error'].length > 0) {
-      throw new Error(`Transaction rejected: ${pendingInfo['pool-error']}`);
-    }
-
-    lastRound++;
-    if (lastRound > (pendingInfo['last-valid'] ?? lastRound) + maxRounds) {
-      throw new Error(`Transaction ${txId} not confirmed after ${maxRounds} rounds`);
-    }
-
-    await algod.statusAfterBlock(lastRound).do();
-  }
+): Promise<Record<string, unknown>> {
+  // algosdk v3 uses bigint for round numbers. Delegate to algosdk's own implementation
+  // which handles type coercion correctly, then convert to plain Record for compatibility.
+  const result = await algosdk.waitForConfirmation(algod, txId, maxRounds);
+  return result as unknown as Record<string, unknown>;
 }
 
 export async function getNetworkParams(algod: algosdk.Algodv2) {

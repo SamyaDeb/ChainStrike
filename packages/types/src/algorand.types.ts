@@ -46,12 +46,13 @@ export interface AsaInfo {
 
 export interface SettlementTxGroup {
   tradeId: string;
+  buyOrderId?: string;       // Buy order ID for escrow release lookup
   buyerAddress: string;
   sellerAddress: string;
   adminAddress: string;      // Admin/custodian account that holds USDC and signs payment txns
   asaId: number;
   tokenAmount: bigint;       // Token base units
-  usdcAmount: bigint;        // USDC microunits (6 decimals)
+  usdcAmount: bigint;        // USDC microunits (6 decimals) — net amount to seller
   platformFee: bigint;       // Platform fee in USDC microunits
   treasuryAddress: string;
 }

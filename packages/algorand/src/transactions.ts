@@ -18,19 +18,25 @@ import { SettlementTxGroup } from '@chainstrike/types';
 // ALL must succeed or ALL fail.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ARC-4 method selectors (SHA-512/256 of method signature, first 4 bytes)
+const ESCROW_RELEASE_TO_SELLER_METHOD = algosdk.ABIMethod.fromSignature(
+  'releaseToSeller(byte[],address,uint64,address,uint64)void',
+);
+
 export function buildSettlementGroup(
   params: SettlementTxGroup,
   suggestedParams: algosdk.SuggestedParams,
-  settlementContractId: number,
+  escrowContractId: number,
   usdcAsaId: number,
 ): algosdk.Transaction[] {
   const note = new TextEncoder().encode(
     JSON.stringify({ platform: 'chainstrike', tradeId: params.tradeId }),
   );
 
-  // Txn 0: Clawback token transfer — admin (clawback authority) moves RWA tokens
-  // from seller's frozen holding to buyer. Required because defaultFrozen=true.
-  // In algosdk v3, assetSender = the account being clawed from (seller).
+  const atc = new algosdk.AtomicTransactionComposer();
+
+  // Txn 0: Clawback RWA token — admin (clawback authority) moves frozen tokens
+  // from seller to buyer. Required because defaultFrozen=true on all RWA assets.
   const tokenTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
     sender: params.adminAddress,
     receiver: params.buyerAddress,
@@ -40,46 +46,59 @@ export function buildSettlementGroup(
     suggestedParams,
     note,
   });
+  atc.addTransaction({ txn: tokenTransfer, signer: algosdk.makeEmptyTransactionSigner() });
 
-  // Txn 1: USDC transfer — admin (custodian) pays seller from held USDC
-  const paymentToSeller = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-    sender: params.adminAddress,
-    receiver: params.sellerAddress,
-    assetIndex: usdcAsaId,
-    amount: params.usdcAmount - params.platformFee,
-    suggestedParams,
-  });
-
-  // Txn 2: Platform fee — admin sends USDC fee to treasury
-  const platformFee = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-    sender: params.adminAddress,
-    receiver: params.treasuryAddress,
-    assetIndex: usdcAsaId,
-    amount: params.platformFee,
-    suggestedParams,
-  });
-
-  const txns = [tokenTransfer, paymentToSeller, platformFee];
-
-  // Txn 3: App call — records trade on-chain for immutable audit trail (optional)
-  if (settlementContractId > 0) {
-    const tradeRecord = algosdk.makeApplicationNoOpTxnFromObject({
-      sender: params.buyerAddress,
-      appIndex: settlementContractId,
-      appArgs: [
-        new TextEncoder().encode('record_trade'),
-        algosdk.encodeUint64(params.asaId),
-        algosdk.encodeUint64(params.usdcAmount),
-        algosdk.encodeUint64(params.tokenAmount),
+  if (escrowContractId > 0 && params.buyOrderId) {
+    // Txn 1: ARC-4 call to escrow contract — releases USDC from escrow to seller + fee.
+    // The escrow issues 2 inner asset transfers (fee=0 each), so outer call needs fee=3000.
+    // Box reference: keyPrefix 'e:' + orderId (as defined in EscrowContract BoxMap).
+    const enc = new TextEncoder();
+    const boxKey = new Uint8Array([...enc.encode('e:'), ...enc.encode(params.buyOrderId)]);
+    const escrowSp = { ...suggestedParams, fee: 3000n, flatFee: true };
+    atc.addMethodCall({
+      appID: escrowContractId,
+      method: ESCROW_RELEASE_TO_SELLER_METHOD,
+      methodArgs: [
+        enc.encode(params.buyOrderId), // orderId: byte[]
+        params.sellerAddress,           // sellerAddress: address
+        params.usdcAmount,              // amount to seller: uint64
+        params.treasuryAddress,         // feeAddress: address
+        params.platformFee,             // feeAmount: uint64
       ],
-      accounts: [params.sellerAddress],
+      sender: params.adminAddress,
+      signer: algosdk.makeEmptyTransactionSigner(),
+      suggestedParams: escrowSp,
+      appForeignAssets: [usdcAsaId],
+      boxes: [{ appIndex: 0, name: boxKey }],
+      // Escrow's inner txns send USDC to these addresses — AVM requires them in accounts array.
+      // Without this, inner axfer to any address ≠ sender fails with "unavailable Holding".
+      appAccounts: [params.sellerAddress, params.treasuryAddress],
+    });
+  } else {
+    // Fallback: admin pays directly from admin wallet (no escrow contract or no orderId).
+    // Used when escrow contract is not deployed or order has no escrow lock recorded.
+    const paymentToSeller = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: params.adminAddress,
+      receiver: params.sellerAddress,
+      assetIndex: usdcAsaId,
+      amount: params.usdcAmount,
       suggestedParams,
     });
-    txns.push(tradeRecord);
+    atc.addTransaction({ txn: paymentToSeller, signer: algosdk.makeEmptyTransactionSigner() });
+
+    if (params.platformFee > 0n) {
+      const feeTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: params.adminAddress,
+        receiver: params.treasuryAddress,
+        assetIndex: usdcAsaId,
+        amount: params.platformFee,
+        suggestedParams,
+      });
+      atc.addTransaction({ txn: feeTransfer, signer: algosdk.makeEmptyTransactionSigner() });
+    }
   }
 
-  // Assign atomic group ID — all txns are linked
-  return algosdk.assignGroupID(txns);
+  return atc.buildGroup().map((t) => t.txn);
 }
 
 // ─── USDC escrow lock (buy order placement) ───────────────────────────────────
