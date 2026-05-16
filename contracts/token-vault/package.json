@@ -1,0 +1,16 @@
+{
+  "name": "@chainstrike/contract-token-vault",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "algokit compile typescript src/*.algo.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf artifacts"
+  },
+  "dependencies": {
+    "@algorandfoundation/algorand-typescript": "^1.1.0"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}
