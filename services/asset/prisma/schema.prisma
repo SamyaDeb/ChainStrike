@@ -1,28 +1,26 @@
 generator client {
-  previewFeatures = ["multiSchema"]
   provider = "prisma-client-js"
   output   = "../../../node_modules/.prisma/asset-client"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("ASSET_DATABASE_URL")
-  schemas  = ["asset", "public"]
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // ─── Asset ────────────────────────────────────────────────────────────────────
 
 model Asset {
-  id                         String        @id @default(uuid())
+  id                         String   @id @default(uuid())
   issuerId                   String
   name                       String
-  ticker                     String        @unique
-  category                   AssetCategory
+  ticker                     String   @unique
+  category                   String
   description                String
-  status                     AssetStatus   @default(DRAFT)
+  status                     String   @default("DRAFT")
 
   // Algorand
-  asaId                      Int?          @unique
+  asaId                      Int?     @unique
   complianceContractId       Int?
   settlementContractId       Int?
 
@@ -31,8 +29,27 @@ model Asset {
   decimals                   Int
   pricePerToken              BigInt?
   tokenizationRatio          String?
-  minimumInvestment          BigInt        @default(0)
-  lockupDays                 Int           @default(0)
+  minimumInvestment          BigInt   @default(0)
+  lockupDays                 Int      @default(0)
+
+  // On-chain proof that issuer deposited their own minimumInvestment amount at launch
+  initialLiquidityTxId       String?
+
+  // Issuer liquidity deposit — USDC sent at token creation to determine initial token allocation
+  liquidityDepositUsdc       BigInt?
+  liquidityDepositTxId       String?
+
+  // Issuer's Algorand wallet — captured at form submission; tokens auto-sent here on ASA deploy
+  issuerWalletAddress        String?
+
+  // Algorand app ID of the deployed TokenVault contract holding remaining supply
+  vaultContractId            Int?
+
+  // Issuance liquidity escrow — on-chain USDC hold during verification pipeline
+  issuanceEscrowTxId         String?  // issuer's on-chain USDC → escrow transfer txId
+  issuanceEscrowAmount       BigInt?  // micro-USDC locked in IssuanceLiquidityEscrow contract
+  issuanceEscrowStatus       String?  // PENDING | RELEASED_TO_VAULT | RETURNED_TO_ISSUER
+  issuanceEscrowReleaseTxId  String?  // txId of releaseToVault or returnToIssuer on-chain call
 
   // Custody
   custodianName              String?
@@ -44,14 +61,14 @@ model Asset {
   metadataHash               String?
 
   // Compliance
-  jurisdictionBlocklist      String[]      @default([])
-  minimumKycTier             Int           @default(1)
-  accreditedInvestorRequired Boolean       @default(false)
+  jurisdictionBlocklist      String   @default("")
+  minimumKycTier             Int      @default(1)
+  accreditedInvestorRequired Boolean  @default(false)
 
-  verificationStatus         VerificationStatus @default(PENDING)
+  verificationStatus         String   @default("PENDING")
   listedAt                   DateTime?
-  createdAt                  DateTime      @default(now())
-  updatedAt                  DateTime      @updatedAt
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
   deletedAt                  DateTime?
 
   documents        AssetDocument[]
@@ -60,132 +77,64 @@ model Asset {
 
   @@index([issuerId])
   @@index([status])
-  @@schema("asset")
-}
-
-enum AssetCategory {
-  PRECIOUS_METALS
-  REAL_ESTATE
-  PRIVATE_DEBT
-  CORPORATE_BOND
-  COMMODITY
-  PRIVATE_EQUITY
-
-  @@schema("asset")
-}
-
-enum AssetStatus {
-  DRAFT
-  SUBMITTED
-  UNDER_REVIEW
-  APPROVED
-  PRE_MARKET
-  ACTIVE
-  SUSPENDED
-  REDEMPTION_OPEN
-  REDEEMED
-  REJECTED
-
-  @@schema("asset")
 }
 
 // ─── Asset Document ───────────────────────────────────────────────────────────
 
 model AssetDocument {
-  id           String              @id @default(uuid())
+  id           String    @id @default(uuid())
   assetId      String
-  type         AssetDocumentType
+  type         String
   fileName     String
   storageKey   String
-  documentHash String              // SHA-256 committed to on-chain metadata
-  isPublic     Boolean             @default(false)
+  documentHash String
+  isPublic     Boolean   @default(false)
   verifiedAt   DateTime?
   expiresAt    DateTime?
-  createdAt    DateTime            @default(now())
+  createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
   asset Asset @relation(fields: [assetId], references: [id])
 
   @@index([assetId])
-  @@schema("asset")
-}
-
-enum AssetDocumentType {
-  VAULT_RECEIPT
-  ASSAY_CERTIFICATE
-  INSURANCE_CERTIFICATE
-  PROPERTY_TITLE
-  VALUATION_REPORT
-  SPV_INCORPORATION
-  CUSTODY_AGREEMENT
-  BOND_INDENTURE
-  OFFERING_DOCUMENT
-  AUDIT_REPORT
-  WAREHOUSE_RECEIPT
-  QUALITY_CERTIFICATE
-  LEGAL_OPINION
-  OTHER
-
-  @@schema("asset")
 }
 
 // ─── Asset Verification Log ───────────────────────────────────────────────────
 
 model AssetVerificationLog {
-  id          String             @id @default(uuid())
+  id          String    @id @default(uuid())
   assetId     String
-  stage       Int                // 1-5
-  status      VerificationStatus
+  stage       Int
+  status      String
   reviewerId  String?
   notes       String?
   completedAt DateTime?
-  createdAt   DateTime           @default(now())
+  createdAt   DateTime  @default(now())
 
   asset Asset @relation(fields: [assetId], references: [id])
 
   @@index([assetId])
-  @@schema("asset")
 }
 
 // ─── Corporate Action ─────────────────────────────────────────────────────────
 
 model CorporateAction {
-  id              String               @id @default(uuid())
+  id              String    @id @default(uuid())
   assetId         String
-  type            CorporateActionType
+  type            String
   recordDate      DateTime
   paymentDate     DateTime?
   amountPerToken  BigInt?
   totalAmount     BigInt?
-  status          CorporateActionStatus @default(ANNOUNCED)
+  status          String    @default("ANNOUNCED")
   onChainTxId     String?
   announcementUrl String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   asset Asset @relation(fields: [assetId], references: [id])
 
   @@index([assetId])
-  @@schema("asset")
-}
-
-enum CorporateActionType {
-  DIVIDEND
-  COUPON_PAYMENT
-  BUYBACK
-  REDEMPTION
-  ANNOUNCEMENT
-
-  @@schema("asset")
-}
-
-enum CorporateActionStatus {
-  ANNOUNCED
-  PROCESSING
-  COMPLETED
-  CANCELLED
-
-  @@schema("asset")
 }
 
 // ─── Oracle Price ─────────────────────────────────────────────────────────────
@@ -194,7 +143,7 @@ model OraclePrice {
   id          String   @id @default(uuid())
   asaId       Int
   assetId     String
-  price       BigInt   // USDC microunits
+  price       BigInt
   source      String
   timestamp   DateTime
   signature   String?
@@ -203,17 +152,4 @@ model OraclePrice {
 
   @@index([asaId])
   @@index([assetId])
-  @@schema("asset")
-}
-
-// ─── Shared Enums ─────────────────────────────────────────────────────────────
-
-enum VerificationStatus {
-  PENDING
-  UNDER_REVIEW
-  APPROVED
-  REJECTED
-  EXPIRED
-
-  @@schema("asset")
 }

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PrismaService } from '../prisma/prisma.service';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 @Injectable()
 export class DocumentService {
@@ -25,13 +25,34 @@ export class DocumentService {
     this.bucket = this.config.getOrThrow<string>('AWS_S3_BUCKET_DOCUMENTS');
   }
 
+  private get isDevMode(): boolean {
+    return this.config.get<string>('AWS_ACCESS_KEY_ID') === 'test';
+  }
+
   async uploadDocument(
     assetId: string,
     documentType: string,
     file: Express.Multer.File,
   ) {
-    const key = `assets/${assetId}/documents/${randomUUID()}-${file.originalname}`;
+    const hash = createHash('sha256').update(file.buffer).digest('hex');
 
+    // Dev bypass: when AWS creds are the test placeholder, skip real S3 upload.
+    // The SHA-256 hash is still computed and stored, so on-chain metadata is real.
+    if (this.isDevMode) {
+      const doc = await this.prisma.assetDocument.create({
+        data: {
+          assetId,
+          type: documentType as any,
+          fileName: file.originalname,
+          storageKey: `dev-local/${assetId}/${randomUUID()}-${file.originalname}`,
+          documentHash: hash,
+        },
+      });
+      this.logger.log(`[DEV] Document stored (no S3): ${doc.id} hash=${hash.slice(0, 16)}…`);
+      return doc;
+    }
+
+    const key = `assets/${assetId}/documents/${randomUUID()}-${file.originalname}`;
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
@@ -40,7 +61,6 @@ export class DocumentService {
       ServerSideEncryption: 'AES256',
     }));
 
-    const hash = require('crypto').createHash('sha256').update(file.buffer).digest('hex');
     const doc = await this.prisma.assetDocument.create({
       data: {
         assetId,
@@ -59,6 +79,11 @@ export class DocumentService {
     const doc = await this.prisma.assetDocument.findUnique({ where: { id: documentId } });
     if (!doc) throw new NotFoundException('Document not found');
 
+    // Dev mode: return a placeholder URL instead of calling S3
+    if (this.isDevMode) {
+      return `http://localhost:8080/api/v1/assets/dev-download/${documentId}`;
+    }
+
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: doc.storageKey });
     return getSignedUrl(this.s3, command, { expiresIn: 900 }); // 15 min
   }
@@ -66,7 +91,15 @@ export class DocumentService {
   async listByAsset(assetId: string) {
     return this.prisma.assetDocument.findMany({
       where: { assetId },
-      select: { id: true, type: true, fileName: true, storageKey: true, createdAt: true },
+      select: { id: true, type: true, fileName: true, storageKey: true, documentHash: true, createdAt: true },
     });
+  }
+
+  async getDocumentHashes(assetId: string): Promise<string[]> {
+    const docs = await this.prisma.assetDocument.findMany({
+      where: { assetId },
+      select: { documentHash: true },
+    });
+    return docs.map((d) => d.documentHash).filter(Boolean) as string[];
   }
 }

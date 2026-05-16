@@ -64,13 +64,43 @@ export class CreateAssetDto {
   @IsOptional()
   minimumKycTier?: number;
 
-  @ApiPropertyOptional({ description: 'Minimum investment in micro-USDC' })
-  @Transform(({ value }) => (value !== undefined ? BigInt(value) : undefined))
+  @ApiPropertyOptional({ description: 'What 1 token represents (e.g. "1 GLDX = 1 gram of 999.9 fine gold")' })
+  @IsString()
   @IsOptional()
-  minimumInvestment?: bigint;
+  tokenizationRatio?: string;
 
-  @ApiPropertyOptional({ description: 'Maximum investment in micro-USDC' })
+  @ApiPropertyOptional({ description: 'SPV legal entity holding the asset on behalf of token holders' })
+  @IsString()
+  @IsOptional()
+  spvEntityName?: string;
+
+  @ApiPropertyOptional({ description: 'Licensed custodian holding the physical asset' })
+  @IsString()
+  @IsOptional()
+  custodianName?: string;
+
+  @ApiPropertyOptional({ description: 'ISO 3166 country code of the custodian jurisdiction' })
+  @IsString()
+  @IsOptional()
+  custodianJurisdiction?: string;
+
+  @ApiPropertyOptional({ description: 'Algorand txId of the issuer liquidity deposit transaction (also stored as initialLiquidityTxId)' })
+  @IsString()
+  @IsOptional()
+  initialLiquidityTxId?: string;
+
+  @ApiPropertyOptional({ description: 'USDC amount the issuer deposits at launch to receive their initial token allocation (micro-USDC)' })
   @Transform(({ value }) => (value !== undefined ? BigInt(value) : undefined))
   @IsOptional()
-  maximumInvestment?: bigint;
+  liquidityDepositUsdc?: bigint;
+
+  @ApiPropertyOptional({ description: 'Algorand txId of the issuer liquidity deposit transaction' })
+  @IsString()
+  @IsOptional()
+  liquidityDepositTxId?: string;
+
+  @ApiPropertyOptional({ description: 'Issuer Pera wallet address — tokens are automatically sent here on ASA deployment' })
+  @IsString()
+  @IsOptional()
+  issuerWalletAddress?: string;
 }
