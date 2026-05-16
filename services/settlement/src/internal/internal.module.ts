@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
 import { InternalController } from './internal.controller';
-import { SignatureCollectorService } from '../signature/signature-collector.service';
+import { SettlementModule } from '../settlement/settlement.module';
 
 @Module({
-  providers: [SignatureCollectorService],
+  imports: [SettlementModule],
   controllers: [InternalController],
-  exports: [SignatureCollectorService],
 })
 export class InternalModule {}

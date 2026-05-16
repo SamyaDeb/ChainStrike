@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import Joi from 'joi';
-import { KafkaProducerModule } from './kafka/kafka-producer.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { InternalModule } from './internal/internal.module';
+import { KafkaProducerModule } from './kafka/kafka-producer.module';
 
 @Module({
   imports: [
@@ -13,8 +13,6 @@ import { InternalModule } from './internal/internal.module';
       envFilePath: ['../../.env', '.env'],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string().required(),
-        SETTLEMENT_DATABASE_URL: Joi.string().required(),
-        KAFKA_BROKERS: Joi.string().required(),
         ALGORAND_ALGOD_SERVER: Joi.string().required(),
         ALGORAND_ALGOD_TOKEN: Joi.string().allow('').required(),
         ALGORAND_ADMIN_MNEMONIC: Joi.string().required(),

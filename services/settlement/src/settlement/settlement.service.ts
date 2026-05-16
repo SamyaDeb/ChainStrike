@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import algosdk from 'algosdk';
 import {
   buildSettlementGroup,
@@ -9,7 +9,6 @@ import {
 import { algorandConfig, FeeSchedule, PlatformConstants } from '@chainstrike/config';
 import { EventProducerService } from '../events/event-producer.service';
 import { SettlementRepository } from './settlement.repository';
-import { SignatureCollectorService } from '../signature/signature-collector.service';
 import { Topics } from '@chainstrike/events';
 import { OrderMatchedPayload, TradeSettledPayload, SettlementFailedPayload } from '@chainstrike/types';
 
@@ -18,7 +17,10 @@ import { OrderMatchedPayload, TradeSettledPayload, SettlementFailedPayload } fro
 //
 // Receives ORDER_MATCHED events from the Matching Engine.
 // Constructs an Algorand atomic transaction group for T+0 settlement.
-// Uses SignatureCollectorService to get seller's wallet signature via WebSocket.
+// Admin (platform custodian) signs all transactions:
+//   - Clawback of frozen RWA tokens from seller → buyer
+//   - USDC payment from admin's held funds → seller
+//   - Platform fee → treasury
 // Broadcasts to Algorand network and waits for confirmation.
 //
 // The atomic group ensures: either BOTH sides complete (tokens + USDC)
@@ -26,7 +28,7 @@ import { OrderMatchedPayload, TradeSettledPayload, SettlementFailedPayload } fro
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Injectable()
-export class SettlementService {
+export class SettlementService implements OnModuleInit {
   private readonly logger = new Logger(SettlementService.name);
   private readonly algoCfg = algorandConfig();
   private readonly adminAccount: algosdk.Account;
@@ -34,14 +36,56 @@ export class SettlementService {
   constructor(
     private readonly settlementRepo: SettlementRepository,
     private readonly events: EventProducerService,
-    private readonly signatureCollector: SignatureCollectorService,
   ) {
-    // Load admin account from mnemonic for signing escrow + settlement contract calls
     const mnemonic = process.env['ALGORAND_ADMIN_MNEMONIC'];
     if (!mnemonic) {
       throw new Error('ALGORAND_ADMIN_MNEMONIC is required');
     }
     this.adminAccount = algosdk.mnemonicToSecretKey(mnemonic);
+  }
+
+  // Ensure admin is opted into USDC on every startup so Txn 1 (USDC payment) never fails
+  async onModuleInit() {
+    try {
+      const algod = getAlgodClient({
+        host: this.algoCfg.algodHost,
+        port: this.algoCfg.algodPort,
+        token: this.algoCfg.algodToken,
+        network: this.algoCfg.network,
+      });
+
+      const info = await algod
+        .accountAssetInformation(this.adminAccount.addr, this.algoCfg.usdcAssetId)
+        .do()
+        .catch(() => null);
+
+      if (info) {
+        const holding = (info as any).assetHolding ?? (info as any)['asset-holding'];
+        const balance = BigInt(holding?.amount ?? 0);
+        this.logger.log(`Admin opted into USDC ✓ (balance: ${Number(balance) / 1_000_000} USDC)`);
+        return;
+      }
+
+      // Not opted in — do the 0-amount self-transfer opt-in
+      const sp = await algod.getTransactionParams().do();
+      const optIn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: this.adminAccount.addr,
+        receiver: this.adminAccount.addr,
+        assetIndex: this.algoCfg.usdcAssetId,
+        amount: 0n,
+        suggestedParams: sp,
+      });
+      const signed = optIn.signTxn(this.adminAccount.sk);
+      const { txid } = await algod.sendRawTransaction(signed).do();
+      await waitForConfirmation(algod, txid, 4);
+      this.logger.log(`Admin opted into USDC (txId=${txid})`);
+    } catch (err) {
+      this.logger.warn(`USDC opt-in check failed: ${(err as Error).message} — ensure ALGORAND_ALGOD_SERVER is reachable`);
+    }
+  }
+
+  async findByTradeId(tradeId: string) {
+    return this.settlementRepo.findByTradeId(tradeId);
   }
 
   // ─── Process a matched trade ──────────────────────────────────────────────────
@@ -107,6 +151,18 @@ export class SettlementService {
 
       const suggestedParams = await algod.getTransactionParams().do();
 
+      // Verify buyer has opted into the ASA — clawback will fail on-chain if not
+      const buyerAssetInfo = await algod
+        .accountAssetInformation(payload.buyerWalletAddress, payload.asaId)
+        .do()
+        .catch(() => null);
+      if (!buyerAssetInfo) {
+        throw new Error(
+          `Buyer ${payload.buyerWalletAddress} has not opted in to ASA ${payload.asaId}. ` +
+          `Settlement cannot proceed until the investor opts in.`,
+        );
+      }
+
       // Build the 4-transaction atomic group
       const txns = buildSettlementGroup(
         {
@@ -125,38 +181,12 @@ export class SettlementService {
         this.algoCfg.usdcAssetId,
       );
 
-      // Txn 0 = token transfer (seller must sign via WebSocket)
-      // Txn 1 = USDC payment (admin signs — admin is custodian holding USDC)
-      // Txn 2 = platform fee (admin signs)
-      // Txn 3 = settlement app call, if contract deployed (admin signs)
-      const adminSignedTxns: (Uint8Array | null)[] = new Array(txns.length).fill(null);
-      for (let i = 1; i < txns.length; i++) {
-        adminSignedTxns[i] = txns[i]!.signTxn(this.adminAccount.sk);
-      }
-
-      // Request seller's signature for token transfer (Txn 0) via WebSocket
-      const sellerSigned = await this.signatureCollector.requestSignatures(
-        payload.tradeId,
-        txns,
-        payload.sellerWalletAddress,
-      );
-
-      if (!sellerSigned) {
-        await this.settlementRepo.updateStatus(settlementId, 'FAILED', 'Signature timeout or seller not connected');
-        await this.settlementRepo.addLog(settlementId, attempt, 'Seller signature timeout');
-        this.logger.warn(`Seller ${payload.sellerWalletAddress} did not sign for trade ${payload.tradeId}`);
-        return;
-      }
-
-      // Assemble the complete signed atomic group
-      const signedTxns: Uint8Array[] = [];
-      for (let i = 0; i < txns.length; i++) {
-        if (i === 0) {
-          signedTxns.push(sellerSigned[i]!);
-        } else {
-          signedTxns.push(adminSignedTxns[i]!);
-        }
-      }
+      // Admin signs all transactions:
+      // Txn 0 = clawback token transfer (admin is clawback authority for frozen RWA)
+      // Txn 1 = USDC payment to seller (admin holds buyer's locked USDC)
+      // Txn 2 = platform fee to treasury
+      // Txn 3 = settlement app call, if contract deployed
+      const signedTxns: Uint8Array[] = txns.map((txn) => txn.signTxn(this.adminAccount.sk));
 
       // Broadcast atomic group to Algorand
       const { txid } = await algod.sendRawTransaction(signedTxns).do();
