@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/settlement-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ─── Settlement Record ────────────────────────────────────────────────────────
+
+model Settlement {
+  id                   String    @id @default(uuid())
+  tradeId              String    @unique
+  asaId                Int
+  assetId              String
+  buyerUserId          String
+  sellerUserId         String
+  buyerWalletAddress   String
+  sellerWalletAddress  String
+  tokenAmount          BigInt
+  usdcAmount           BigInt
+  platformFee          BigInt
+  status               String    @default("PENDING")
+  attempts             Int       @default(0)
+  lastAttemptAt        DateTime?
+  onChainTxId          String?
+  onChainGroupId       String?
+  confirmedRound       Int?
+  failureReason        String?
+  settledAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  logs SettlementLog[]
+
+  @@index([status])
+  @@index([tradeId])
+}
+
+// ─── Settlement Log (each attempt) ───────────────────────────────────────────
+
+model SettlementLog {
+  id            String   @id @default(uuid())
+  settlementId  String
+  attempt       Int
+  action        String
+  txId          String?
+  error         String?
+  metadata      String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  settlement Settlement @relation(fields: [settlementId], references: [id])
+
+  @@index([settlementId])
+}
+
+// ─── Escrow Hold ──────────────────────────────────────────────────────────────
+
+model EscrowHold {
+  id            String    @id @default(uuid())
+  orderId       String    @unique
+  userId        String
+  walletAddress String
+  asaId         Int
+  amount        BigInt
+  lockTxId      String?
+  status        String    @default("LOCKED")
+  releasedAt    DateTime?
+  releaseTxId   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}

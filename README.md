@@ -1,325 +1,207 @@
-# ChainStrike
+# ChainStrike — Institution-Grade RWA Orderbook Exchange on Algorand
 
-<img width="1470" height="837" alt="Screenshot 2026-04-05 at 10 41 26 AM" src="https://github.com/user-attachments/assets/0adb0f8d-db3e-4eec-afa0-c2f4db2cc01e" />
+A permissioned, compliant orderbook-based exchange for Real World Asset (RWA) tokenization and trading, built on the Algorand blockchain. ChainStrike enables institutions to issue tokenized assets, manage KYC/KYB compliance, and execute atomic settlement with cryptographic certainty.
 
-**Decentralized Derivatives Trading Platform on Algorand**
+## 🏗️ Architecture
 
-ChainStrike is a cutting-edge DeFi platform enabling perpetual futures and options trading on the Algorand blockchain. Built with Algorand Python (Puya) smart contracts and a modern Next.js frontend.
+ChainStrike is a full-stack monorepo with:
 
-![Algorand](https://img.shields.io/badge/Algorand-000000?style=for-the-badge&logo=algorand&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+- **Frontend Applications**
+  - `apps/web` — Investor trading platform (Next.js + Wallet integration)
+  - `apps/issuer` — Asset issuer dashboard (Next.js + Admin UI)
+  - `apps/admin` — Platform administration (Next.js)
 
-## Features
+- **Backend Services**
+  - `services/asset` — Asset tokenization & lifecycle management
+  - `services/compliance` — AML/KYC/KYB rule engine
+  - `services/identity` — User authentication & wallet management
+  - `services/orderbook` — Central limit order book (CLOB) with WebSocket feeds
+  - `services/settlement` — Atomic settlement execution & clearing
+  - `services/analytics` — Event aggregation & reporting
+  - `services/notification` — Real-time user notifications
 
-### Perpetual Futures Trading
+- **Core Packages**
+  - `packages/algorand` — Algorand SDK wrapper (ASA, ARC-20, transactions)
+  - `packages/types` — Shared TypeScript type definitions
 
-- **Up to 50x Leverage** - Trade ALGO/USD perpetuals with high leverage
-- **Long & Short Positions** - Profit from both rising and falling markets
-- **Funding Rate Mechanism** - Fair price discovery through periodic funding payments
-- **Real-time Liquidations** - Automated keeper bots ensure protocol solvency
+- **Smart Contracts**
+  - `contracts/token-vault` — Asset custody & issuance
+  - `contracts/issuance-escrow` — Settlement escrow logic
+  - `contracts/marketplace` — Orderbook execution (if applicable)
 
-### Options Trading
-
-- **Call & Put Options** - Trade European-style options on ALGO/USD
-- **Multiple Expiries** - 5-minute, hourly, daily, and weekly options
-- **Dynamic Strike Prices** - ATM, ITM, and OTM strikes based on oracle price
-- **Black-Scholes Pricing** - Industry-standard premium calculations
-
-### Liquidity Pools
-
-- **Single-sided ALGO Deposits** - Provide liquidity with just ALGO
-- **Protocol Revenue Sharing** - Earn trading fees and premiums
-- **Auto-compounding** - Rewards automatically reinvested
-
-### Staking
-
-- **STRIKE Token Staking** - Stake governance tokens for rewards
-- **Tiered Rewards** - Higher stakes earn better multipliers
-- **Platform Fee Distribution** - Share in protocol revenue
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (Next.js)                        │
-├─────────────────────────────────────────────────────────────────┤
-│  Components    │    Hooks      │   Services   │    Stores       │
-│  - Trading UI  │  - useTrading │  - contracts │  - priceStore   │
-│  - Pool UI     │  - usePool    │  - oracle    │  - uiStore      │
-│  - Staking UI  │  - useStaking │  - premium   │                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Algorand Smart Contracts                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Oracle          │  Perpetuals     │  Options       │  Staking  │
-│  - Price feeds   │  - Market       │  - Market      │  - Stake  │
-│  - TWAP          │  - Pool         │  - Pool        │  - Claim  │
-│  - Updates       │  - Positions    │  - Options     │  - Unstake│
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        Keeper Bots                               │
-├─────────────────────────────────────────────────────────────────┤
-│  Oracle Keeper     │  Settlement Keeper   │  Liquidation Keeper │
-│  - Price updates   │  - Option expiry     │  - Position health  │
-│  - Every 30s       │  - Payout calc       │  - Auto-liquidate   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Smart Contracts
-
-| Contract         | Description                     | App ID (TestNet) |
-| ---------------- | ------------------------------- | ---------------- |
-| Oracle           | Price feed aggregator with TWAP | 758290477        |
-| PerpetualsMarket | Perpetual futures trading logic | 758290831        |
-| PerpetualsPool   | Liquidity pool for perps        | 758290663        |
-| OptionsMarket    | Options trading and settlement  | 758290651        |
-| OptionsPool      | Liquidity pool for options      | 758290646        |
-| Staking          | STRIKE token staking rewards    | -                |
-| StrikeToken      | Governance token (ARC-20)       | -                |
-
-## Project Structure
-
-```
-ChainStrike/
-├── contracts/              # Algorand Python smart contracts
-│   ├── oracle.py          # Price oracle with TWAP
-│   ├── perpetuals_market.py  # Perps trading engine
-│   ├── perpetuals_pool.py    # Perps liquidity pool
-│   ├── options_market.py     # Options trading engine
-│   ├── options_pool.py       # Options liquidity pool
-│   ├── staking.py            # Token staking
-│   ├── strike_token.py       # Governance token
-│   └── scripts/              # Deployment & testing scripts
-├── frontend/               # Next.js web application
-│   ├── src/
-│   │   ├── app/           # Next.js app router pages
-│   │   ├── components/    # React components
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── services/      # Contract interaction services
-│   │   ├── stores/        # Zustand state stores
-│   │   ├── lib/           # Utility functions
-│   │   ├── types/         # TypeScript definitions
-│   │   └── config/        # Configuration files
-│   └── public/            # Static assets
-├── keepers/                # Automated keeper bots
-│   ├── oracle_keeper.py   # Price feed updates
-│   ├── settlement_keeper.py  # Option settlements
-│   └── liquidation_keeper.py # Position liquidations
-└── docs/                   # Documentation
-```
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
+- Node.js 18+
+- Docker & Docker Compose
+- Algorand Sandbox (optional, for local testing)
 
-- Node.js 18+ and npm
-- Python 3.12+
-- AlgoKit CLI
-- Algorand TestNet account with ALGO
-
-### Installation
+### Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/SamyaDeb/ChainStrike.git
-cd ChainStrike
-
-# Install frontend dependencies
-cd frontend
+# Install dependencies
 npm install
 
-# Install contract dependencies
-cd ../contracts
-pip install -r requirements.txt  # or use algokit
-```
+# Setup environment
+cp .env.example .env
+# Edit .env with your configuration
 
-### Running the Frontend
-
-```bash
-cd frontend
+# Start all services (Turbo monorepo)
 npm run dev
-```
 
-Visit `http://localhost:3000` to access the application.
+# Run services individually
+npm run dev --filter=asset-service
+npm run dev --filter=web
 
-### Compiling Contracts
+# Build for production
+npm run build
 
-```bash
-cd contracts
-algokit compile py oracle.py
-algokit compile py perpetuals_market.py
-algokit compile py perpetuals_pool.py
-algokit compile py options_market.py
-algokit compile py options_pool.py
-```
-
-### Running Keepers
-
-```bash
-cd keepers
-# Set environment variables
-export ALGORAND_MNEMONIC="your mnemonic here"
-
-# Run individual keepers
-python oracle_keeper.py
-python settlement_keeper.py
-python liquidation_keeper.py
-
-# Or run all keepers
-./run_all.sh
-```
-
-## Trading Guide
-
-### Opening a Perpetual Position
-
-1. Connect your wallet (Pera, Defly, or Lute)
-2. Navigate to Trade → Perpetuals
-3. Select Long or Short
-4. Enter position size and leverage (1x-50x)
-5. Review margin requirement and liquidation price
-6. Click "Open Position"
-
-### Trading Options
-
-1. Connect your wallet
-2. Navigate to Trade → Options
-3. Select Call or Put
-4. Choose strike price and expiry
-5. Enter number of contracts
-6. Review premium and potential payout
-7. Click "Buy Option"
-
-### Providing Liquidity
-
-1. Navigate to Pool
-2. Enter amount of ALGO to deposit
-3. Review expected LP tokens
-4. Click "Deposit"
-
-## Technical Details
-
-### Position Mechanics
-
-**Perpetuals:**
-
-- Positions stored in contract box storage (BoxMap)
-- Position struct: 106 bytes (id, trader, is_long, size, collateral, leverage, entry_price, liquidation_price, funding_time, accumulated_funding, open_time, is_open)
-- Liquidation when margin ratio falls below 5%
-- Funding rate calculated every 8 hours
-
-**Options:**
-
-- European-style (exercise only at expiry)
-- Premium calculated using Black-Scholes model
-- Settlement based on oracle price at expiry
-- ITM options auto-exercised by settlement keeper
-
-### Oracle Design
-
-- Price updates every 30 seconds by keeper
-- 6-decimal precision (1 ALGO = 1,000,000 units)
-- TWAP (Time-Weighted Average Price) for liquidations
-- Multiple authorized price feeders supported
-
-### Security Features
-
-- Reentrancy protection on all state-changing methods
-- Access control on admin functions
-- Price staleness checks
-- Maximum leverage limits
-- Minimum collateral requirements
-
-## Tech Stack
-
-### Frontend
-
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS + Custom Cyberpunk Theme
-- **UI Components**: shadcn/ui + Radix UI
-- **State Management**: Zustand
-- **Blockchain**: algosdk, @txnlab/use-wallet-react
-- **Charts**: Lightweight Charts
-- **Animations**: Framer Motion
-
-### Smart Contracts
-
-- **Language**: Algorand Python (Puya)
-- **Network**: Algorand TestNet
-- **Oracle**: Multi-source (Binance + CoinGecko + Vestige)
-- **Standards**: ARC4, ARC56
-
-### Design System
-
-- **Theme**: Dark Cyberpunk
-- **Colors**: Neon purple, blue, cyan gradients
-- **Effects**: Glassmorphism, neon glows, shadows
-- **Fonts**: Inter (sans), JetBrains Mono (mono)
-
-## Development
-
-### Running Tests
-
-```bash
-# Contract tests
-cd contracts
-python -m pytest scripts/test_*.py
-
-# Frontend tests
-cd frontend
+# Run tests
 npm run test
 ```
 
-### Building for Production
+### Docker Deployment
 
 ```bash
-cd frontend
-npm run build
+# Start entire stack with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
 ```
 
-## Deployment
+## 📋 Core Features
 
-### TestNet (Current)
+### Asset Issuance
+- Create and manage RWA tokens using ARC-20 standard
+- Multi-step issuance workflow with document uploads
+- Asset metadata management (ISIN, currency, yield, etc.)
 
-The contracts are deployed on Algorand TestNet. Get TestNet ALGO from the [Algorand Faucet](https://bank.testnet.algorand.network/).
+### Compliance Engine
+- **KYC/KYB** — Multi-tier identity verification
+- **AML Checks** — Sanctions list screening & transaction monitoring
+- **Whitelist Management** — Institutional investor control
+- **Audit Trail** — Complete compliance history
 
-### MainNet
+### Trading Infrastructure
+- **Orderbook** — Central limit order book with real-time WebSocket feeds
+- **Order Types** — Limit, market, and conditional orders
+- **Risk Management** — Position limits, collateral tracking
+- **Asset Opt-In** — Algorand asset opt-in workflow (ASA)
 
-For MainNet deployment, update the contract app IDs in `frontend/src/config/contracts.ts` and set the network configuration in `frontend/src/config/networks.ts`.
+### Settlement
+- **Atomic Swaps** — Crypto-verified settlement
+- **Custody** — Multi-sig escrow for assets
+- **Clearing** — T+0 or T+N settlement cycles
+- **Vault Management** — Token custody & recovery
 
-## Contributing
+### Market Data
+- Real-time order feeds via WebSocket
+- Historical trade data & analytics
+- Performance reporting & P&L tracking
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## 🔐 Security Considerations
 
-## License
+- **All authentication** uses Wallet-based signing (no passwords)
+- **Smart contracts** hold assets in custody (not centralized wallets)
+- **Settlement** requires cryptographic proof & multi-sig approval
+- **Compliance rules** are enforced at the service layer
+- **Audit logging** captures all state changes
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📦 Deployment
 
-## Acknowledgments
+### Environment Variables
+See `.env.example` for full configuration. Key variables:
 
-- [Algorand Foundation](https://algorand.foundation/) for the blockchain infrastructure
-- [AlgoKit](https://github.com/algorandfoundation/algokit-cli) for development tooling
-- [Pera Wallet](https://perawallet.app/) for wallet integration
-- [TradingView](https://www.tradingview.com/) for charting widgets
+```
+ALGORAND_NETWORK=mainnet|testnet|devnet
+ALGORAND_NODE_URL=https://...
+ALGOD_TOKEN=...
 
-## Contact
+# Database connections
+DATABASE_URL=postgres://...
+REDIS_URL=redis://...
 
-- GitHub: [@SamyaDeb](https://github.com/SamyaDeb)
-- Email: sammodeb28@gmail.com
+# Service ports
+ASSET_SERVICE_PORT=3001
+COMPLIANCE_SERVICE_PORT=3002
+ORDERBOOK_SERVICE_PORT=3003
+SETTLEMENT_SERVICE_PORT=3004
+```
+
+### Vercel Deployment (Next.js apps)
+```bash
+# Deploy web app
+vercel deploy --prod apps/web
+
+# Deploy issuer app
+vercel deploy --prod apps/issuer
+
+# Deploy admin app
+vercel deploy --prod apps/admin
+```
+
+### Kubernetes (Services)
+Helm charts and k8s manifests available in `infrastructure/k8s/`.
+
+## 📊 Project Phases (Implementation)
+
+1. ✅ **Architecture & Infrastructure** — Monorepo setup, service scaffolding
+2. ✅ **Core Authentication** — Wallet-based sign-in
+3. ✅ **Asset Management** — Issuance & tokenization
+4. ✅ **Algorand Integration** — On-chain ASA interaction
+5. ✅ **Compliance Engine** — KYC/AML/Whitelist
+6. ✅ **Orderbook** — CLOB implementation
+7. ✅ **Settlement** — Atomic swap execution
+8. ✅ **Web Trading App** — Investor platform
+9. ✅ **Issuer Dashboard** — Asset management UI
+10. ✅ **Admin Panel** — Platform operations
+
+**Current Phase:** Phase 11 (Analytics, Notifications, Production Hardening)
+
+## 🧪 Testing
+
+```bash
+# Unit tests
+npm run test
+
+# Integration tests
+npm run test:integration
+
+# E2E tests (Playwright)
+npm run test:e2e
+
+# Contract testing
+npm run test:contracts
+```
+
+## 📚 Documentation
+
+- **[Implementation Guide](./Implementation.md)** — Detailed phase-wise architecture & decisions
+- **[API Reference](./docs/api.md)** — REST & WebSocket endpoints
+- **[Smart Contract Specs](./contracts/README.md)** — ARC-20, escrow, settlement logic
+- **[Deployment Guide](./docs/deployment.md)** — Production setup & monitoring
+
+## 🔗 External Integrations
+
+- **Algorand** — Blockchain for asset settlement
+- **PostgreSQL** — Core relational data (assets, orders, users)
+- **Redis** — Order cache, session management
+- **WebSocket** — Real-time order feeds & notifications
+
+## 📞 Support & Contributing
+
+- **Issues** — GitHub Issues for bugs & feature requests
+- **Discussions** — GitHub Discussions for architecture questions
+- **Contributing** — See CONTRIBUTING.md for PR guidelines
+
+## 📄 License
+
+Proprietary — All rights reserved.
 
 ---
 
-**Disclaimer:** This is experimental software. Use at your own risk. Always test thoroughly on TestNet before using real funds.
-
-**Built with love on Algorand**
+**Built with:** TypeScript, Next.js, NestJS, Algorand SDK, PostgreSQL, Redis

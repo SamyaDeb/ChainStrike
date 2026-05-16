@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/identity-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id              String             @id @default(uuid())
+  email           String             @unique
+  passwordHash    String
+  emailVerified   Boolean            @default(false)
+  emailToken      String?
+  role            String             @default("INVESTOR")
+  status          String             @default("ACTIVE")
+  mfaEnabled      Boolean            @default(false)
+  mfaSecret       String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+  auditLogs       IdentityAuditLog[]
+  kybEntity       KybEntity?
+  kycProfile      KycProfile?
+  sessions        Session[]
+  walletAddresses WalletAddress[]
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  refreshToken String    @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model KycProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  tier               Int       @default(0)
+  status             String    @default("PENDING")
+  riskBand           String    @default("CLEAN")
+  jurisdiction       String
+  sumsubApplicantId  String?   @unique
+  sumsubInspectionId String?
+  approvedAt         DateTime?
+  expiresAt          DateTime?
+  rejectionReason    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  documents          KycDocument[]
+  user               User      @relation(fields: [userId], references: [id])
+}
+
+model KycDocument {
+  id           String    @id @default(uuid())
+  kycProfileId String
+  type         String
+  status       String    @default("PENDING")
+  storageKey   String
+  documentHash String
+  expiresAt    DateTime?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  kycProfile   KycProfile @relation(fields: [kycProfileId], references: [id])
+
+  @@index([kycProfileId])
+}
+
+model KybEntity {
+  id                        String    @id @default(uuid())
+  issuerId                  String    @unique
+  legalName                 String
+  tradingName               String?
+  businessType              String
+  registrationNumber        String
+  incorporationJurisdiction String
+  incorporationDate         DateTime
+  registeredAddress         String
+  operationalAddress        String?
+  primaryBusinessActivity   String
+  website                   String?
+  status                    String    @default("PENDING")
+  riskRating                String    @default("LOW")
+  sumsubCompanyApplicantId  String?   @unique
+  approvedAt                DateTime?
+  expiresAt                 DateTime?
+  rejectionReason           String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  deletedAt                 DateTime?
+  signatories               AuthorizedSignatory[]
+  documents                 KybDocument[]
+  issuer                    User      @relation(fields: [issuerId], references: [id])
+  uboRecords                UboRecord[]
+}
+
+model KybDocument {
+  id           String    @id @default(uuid())
+  kybEntityId  String
+  type         String
+  status       String    @default("PENDING")
+  storageKey   String
+  documentHash String
+  issuedDate   DateTime?
+  expiresDate  DateTime?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  kybEntity    KybEntity @relation(fields: [kybEntityId], references: [id])
+
+  @@index([kybEntityId])
+}
+
+model UboRecord {
+  id                  String    @id @default(uuid())
+  kybEntityId         String
+  fullName            String
+  dateOfBirth         DateTime
+  nationality         String
+  residenceCountry    String
+  ownershipPercentage Float
+  controlTypes        String    @default("")
+  isPep               Boolean   @default(false)
+  kycStatus           String    @default("PENDING")
+  linkedUserId        String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+  kybEntity           KybEntity @relation(fields: [kybEntityId], references: [id])
+
+  @@index([kybEntityId])
+}
+
+model AuthorizedSignatory {
+  id           String    @id @default(uuid())
+  kybEntityId  String
+  fullName     String
+  title        String
+  role         String
+  kycStatus    String    @default("PENDING")
+  linkedUserId String?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  kybEntity    KybEntity @relation(fields: [kybEntityId], references: [id])
+}
+
+model WalletAddress {
+  id         String    @id @default(uuid())
+  userId     String
+  address    String    @unique
+  network    String
+  isPrimary  Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model IdentityAuditLog {
+  id            String   @id @default(uuid())
+  userId        String?
+  actorId       String
+  actorType     String
+  action        String
+  entityType    String
+  entityId      String
+  previousState String?
+  newState      String?
+  reason        String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  user          User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
