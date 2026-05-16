@@ -48,48 +48,79 @@ export class EscrowService {
         network: this.algoCfg.network,
       });
 
-      const txInfo = await algod.pendingTransactionInformation(escrowTxId).do();
+      // Try pending pool first (works within ~5 minutes of confirmation),
+      // then fall back to indexer for older confirmed transactions.
+      let txn: any;
+      try {
+        const txInfo = await algod.pendingTransactionInformation(escrowTxId).do();
+        if (!txInfo.confirmedRound) {
+          this.logger.warn(`Escrow TX ${escrowTxId} not yet confirmed`);
+          return false;
+        }
+        txn = txInfo.txn.txn;
+      } catch {
+        // Tx left the pending pool — look it up via indexer
+        const INDEXER = process.env['ALGORAND_INDEXER_SERVER'] ?? 'https://testnet-idx.algonode.cloud';
+        const indexer = new algosdk.Indexer('', INDEXER, 443);
+        const result = await indexer.lookupTransactionByID(escrowTxId).do();
+        const raw = result.transaction as any;
+        // algosdk v3 indexer returns camelCase field names
+        const xferRaw = raw.assetTransferTransaction ?? raw['asset-transfer-transaction'];
+        txn = {
+          type: raw.txType ?? raw['tx-type'],
+          sender: raw.sender,
+          assetTransfer: xferRaw
+            ? {
+                assetIndex: Number(xferRaw.assetId ?? xferRaw['asset-id']),
+                amount: BigInt(xferRaw.amount ?? 0),
+                receiver: xferRaw.receiver,
+              }
+            : undefined,
+        };
+      }
 
-      // Check if transaction is confirmed
-      if (!txInfo['confirmed-round']) {
-        this.logger.warn(`Escrow TX ${escrowTxId} not yet confirmed`);
+      // Verify it's an asset transfer (USDC) — TransactionType enum
+      if (txn.type !== 'axfer') {
+        this.logger.warn(`Escrow TX ${escrowTxId} is not an asset transfer (type=${txn.type})`);
         return false;
       }
 
-      // Verify it's an asset transfer (USDC)
-      const txn = txInfo['txn'];
-      if (txn['type'] !== 'axfer') {
-        this.logger.warn(`Escrow TX ${escrowTxId} is not an asset transfer`);
+      // txn.assetTransfer holds the asset-transfer-specific fields
+      const xfer = txn.assetTransfer;
+      if (!xfer) {
+        this.logger.warn(`Escrow TX ${escrowTxId} missing assetTransfer fields`);
         return false;
       }
 
-      // Verify asset is USDC
-      if (txn['xaid'] !== this.usdcAsaId) {
-        this.logger.warn(`Escrow TX ${escrowTxId} asset mismatch: ${txn['xaid']} !== ${this.usdcAsaId}`);
+      // Verify asset is USDC (assetIndex is bigint in v3)
+      if (Number(xfer.assetIndex) !== this.usdcAsaId) {
+        this.logger.warn(`Escrow TX ${escrowTxId} asset mismatch: ${xfer.assetIndex} !== ${this.usdcAsaId}`);
         return false;
       }
 
       // Verify sender is the buyer
-      if (txn['snd'] !== expectedBuyerAddress) {
-        this.logger.warn(`Escrow TX ${escrowTxId} sender mismatch: ${txn['snd']} !== ${expectedBuyerAddress}`);
+      const senderStr = typeof txn.sender === 'string' ? txn.sender : txn.sender.toString();
+      if (senderStr !== expectedBuyerAddress) {
+        this.logger.warn(`Escrow TX ${escrowTxId} sender mismatch: ${senderStr} !== ${expectedBuyerAddress}`);
         return false;
       }
 
-      // Verify receiver is the escrow contract or admin treasury
+      // Verify receiver is the escrow contract or treasury wallet
       const expectedReceiver = this.escrowContractId
-        ? algosdk.getApplicationAddress(this.escrowContractId)
+        ? algosdk.getApplicationAddress(this.escrowContractId).toString()
         : process.env['TREASURY_WALLET_ADDRESS'];
       if (!expectedReceiver) {
         this.logger.warn('No escrow contract or treasury address configured');
         return false;
       }
-      if (txn['arcv'] !== expectedReceiver) {
-        this.logger.warn(`Escrow TX ${escrowTxId} receiver mismatch: ${txn['arcv']} !== ${expectedReceiver}`);
+      const receiverStr = typeof xfer.receiver === 'string' ? xfer.receiver : xfer.receiver.toString();
+      if (receiverStr !== expectedReceiver) {
+        this.logger.warn(`Escrow TX ${escrowTxId} receiver mismatch: ${receiverStr} !== ${expectedReceiver}`);
         return false;
       }
 
-      // Verify amount
-      const amount = BigInt(txn['aamt'] ?? 0);
+      // Verify amount (bigint in v3)
+      const amount = xfer.amount ?? 0n;
       if (amount < expectedAmount) {
         this.logger.warn(`Escrow TX ${escrowTxId} amount too low: ${amount} < ${expectedAmount}`);
         return false;

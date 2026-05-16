@@ -9,6 +9,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { MarketRepository } from '../market/market.repository';
+import { InMemoryOrderBookStore } from '../orderbook/in-memory-order-book.store';
 import axios from 'axios';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export class OrderbookGateway implements OnGatewayConnection, OnGatewayDisconnec
   constructor(
     private readonly jwtService: JwtService,
     private readonly marketRepo: MarketRepository,
+    private readonly bookStore: InMemoryOrderBookStore,
   ) {
     this.settlementUrl = process.env.SETTLEMENT_SERVICE_URL ?? 'http://localhost:3005';
   }
@@ -85,10 +87,8 @@ export class OrderbookGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     // Push current depth snapshot immediately so the client sees data without waiting for the next trade
     try {
-      const snapshot = await this.marketRepo.getDepthSnapshot(payload.assetId, 20);
-      if (snapshot) {
-        client.emit('orderbook:snapshot', snapshot);
-      }
+      const depth = this.bookStore.getDepth(payload.assetId, 20);
+      client.emit('orderbook:snapshot', depth);
     } catch (err) {
       this.logger.error(`Failed to send initial snapshot: ${(err as Error).message}`);
     }

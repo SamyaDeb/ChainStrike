@@ -4,9 +4,9 @@ import {
 import { OrderRepository } from './order.repository';
 import { ComplianceCheckService } from '../compliance/compliance-check.service';
 import { MarketRepository } from '../market/market.repository';
-import { EventProducerService } from '../events/event-producer.service';
 import { EscrowService } from '../escrow/escrow.service';
-import { Topics } from '@chainstrike/events';
+import { MatchingService } from '../matching/matching.service';
+import { InMemoryOrderBookStore } from '../orderbook/in-memory-order-book.store';
 import { PlaceOrderDto, OrderType } from './dto/place-order.dto';
 import { PlatformConstants } from '@chainstrike/config';
 
@@ -18,8 +18,9 @@ export class OrderService {
     private readonly orderRepo: OrderRepository,
     private readonly marketRepo: MarketRepository,
     private readonly complianceCheck: ComplianceCheckService,
-    private readonly events: EventProducerService,
     private readonly escrowService: EscrowService,
+    private readonly matchingService: MatchingService,
+    private readonly bookStore: InMemoryOrderBookStore,
   ) {}
 
   async placeOrder(userId: string, kycTier: number, dto: PlaceOrderDto) {
@@ -60,7 +61,7 @@ export class OrderService {
         if (!dto.escrowTxId) {
           throw new BadRequestException('BUY orders require an escrow lock transaction ID');
         }
-        const expectedUsdc = (price ?? market.lastTradedPrice ?? 0n) * quantity;
+        const expectedUsdc = ((price ?? market.lastTradedPrice ?? 0n) * quantity) / 1_000_000n;
         const verified = await this.escrowService.verifyEscrowLock(
           dto.escrowTxId,
           dto.walletAddress,
@@ -71,11 +72,11 @@ export class OrderService {
         }
         escrowTxId = dto.escrowTxId;
       } else {
-        this.logger.log(`DEV_SKIP_USDC_PAYMENT: skipping escrow verification for BUY order`);
+        this.logger.log('DEV_SKIP_USDC_PAYMENT: skipping escrow verification for BUY order');
       }
     }
 
-    // Pre-trade compliance check
+    // Pre-trade compliance check (calls Compliance Service via HTTP)
     const complianceResult = await this.complianceCheck.runPreTradeChecks({
       userId,
       walletAddress: dto.walletAddress,
@@ -111,24 +112,37 @@ export class OrderService {
     // Record escrow lock on contract for buy orders
     if (dto.side === 'BUY' && escrowTxId) {
       try {
-        const expectedUsdc = (price ?? market.lastTradedPrice ?? 0n) * quantity;
+        const expectedUsdc = ((price ?? market.lastTradedPrice ?? 0n) * quantity) / 1_000_000n;
         await this.escrowService.recordEscrowLock(order.id, dto.walletAddress, expectedUsdc);
       } catch (err) {
         this.logger.error(`Failed to record escrow lock for order ${order.id}: ${(err as Error).message}`);
-        // Don't fail the order - the escrow TX is already on-chain
       }
     }
 
-    await this.events.emit(Topics.ORDER_PLACED, {
+    // Inline matching (replaces Kafka ORDER_PLACED event)
+    const bookEntry = {
       orderId: order.id,
       userId,
       assetId: dto.assetId,
       asaId: market.asaId,
-      side: dto.side,
-      orderType: dto.orderType,
-      price: price?.toString(),
-      quantity: quantity.toString(),
+      marketId: market.id,
+      side: dto.side.toLowerCase() as 'buy' | 'sell',
+      type: dto.orderType.toLowerCase() as 'limit' | 'market',
+      timeInForce: (dto.timeInForce ?? 'GTC') as 'GTC' | 'IOC' | 'FOK',
+      price,
+      quantity,
+      remainingQuantity: quantity,
       walletAddress: dto.walletAddress,
+      timestamp: Date.now(),
+    };
+
+    // Run matching asynchronously so order response returns immediately
+    this.matchingService.processOrder(bookEntry).then((matches) => {
+      if (matches.length > 0) {
+        this.logger.log(`Order ${order.id} matched: ${matches.length} trade(s)`);
+      }
+    }).catch((err) => {
+      this.logger.error(`Matching error for order ${order.id}: ${(err as Error).message}`);
     });
 
     this.logger.log(`Order placed: ${order.id} ${dto.side} ${quantity} @ ${price}`);
@@ -149,13 +163,16 @@ export class OrderService {
         await this.escrowService.returnToBuyer(orderId);
       } catch (err) {
         this.logger.error(`Failed to return escrow for order ${orderId}: ${(err as Error).message}`);
-        // Continue with cancellation even if escrow return fails
       }
     }
 
-    await this.orderRepo.updateStatus(orderId, 'CANCELLED');
-    await this.events.emit(Topics.ORDER_CANCELLED, { orderId, userId, reason: 'User cancelled' });
+    // Remove from in-memory book
+    const market = await this.marketRepo.findById(order.marketId);
+    if (market) {
+      this.matchingService.cancelOrder(market.assetId, orderId);
+    }
 
+    await this.orderRepo.updateStatus(orderId, 'CANCELLED');
     return { orderId, status: 'CANCELLED' };
   }
 
@@ -164,6 +181,12 @@ export class OrderService {
   }
 
   async getDepthSnapshot(assetId: string, levels: number) {
+    // Read from in-memory store for live data; fall back to DB if store is empty
+    const depth = this.bookStore.getDepth(assetId, levels);
+    if (depth.bids.length > 0 || depth.asks.length > 0) {
+      return { assetId, bids: depth.bids, asks: depth.asks };
+    }
+    // Fall back to DB-backed depth (for restart recovery)
     return this.marketRepo.getDepthSnapshot(assetId, levels);
   }
 }

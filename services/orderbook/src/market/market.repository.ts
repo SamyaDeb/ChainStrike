@@ -66,7 +66,7 @@ export class MarketRepository {
 
     if (trades.length === 0) {
       // Return synthetic flat candles so the chart renders
-      const buckets = [];
+      const buckets: Array<{ t: number; o: string; h: string; l: string; c: string; v: string }> = [];
       for (let i = limit - 1; i >= 0; i--) {
         const ts = Date.now() - i * this.intervalMs(interval);
         const jitter = (Math.random() - 0.5) * refPrice * 0.02;

@@ -13,12 +13,13 @@ export class MarketService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async openMarket(assetId: string, asaId: number, ticker: string) {
+  async openMarket(assetId: string, asaId: number, ticker: string, referencePriceUsdc?: bigint) {
     return this.marketRepo.create({
       assetId,
       asaId,
       ticker,
       status: 'PRE_MARKET',
+      ...(referencePriceUsdc !== undefined ? { referencePriceUsdc } : {}),
     });
   }
 

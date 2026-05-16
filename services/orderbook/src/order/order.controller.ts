@@ -6,6 +6,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { OrderService } from './order.service';
 import { MarketRepository } from '../market/market.repository';
 import { PlaceOrderDto } from './dto/place-order.dto';
+import { DevMatchingService } from './dev-matching.service';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -13,6 +14,7 @@ export class OrderController {
   constructor(
     private readonly orderService: OrderService,
     private readonly marketRepo: MarketRepository,
+    private readonly devMatching: DevMatchingService,
   ) {}
 
   @Post()
@@ -55,6 +57,12 @@ export class OrderController {
     @Query('levels') levels?: string,
   ) {
     return this.marketRepo.getDepthSnapshot(assetId, Number(levels ?? 20));
+  }
+
+  @Post(':assetId/dev/trigger-match')
+  @ApiOperation({ summary: '[DEV] Synchronously run price-time matching for an asset (bypasses Kafka)' })
+  async devTriggerMatch(@Param('assetId') assetId: string) {
+    return this.devMatching.triggerMatch(assetId);
   }
 
   @Get(':assetId/ohlcv')

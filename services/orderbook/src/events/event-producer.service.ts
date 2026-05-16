@@ -1,26 +1,12 @@
-import { Injectable, Inject, OnModuleInit, Logger } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
-import { EventEnvelope } from '@chainstrike/types';
-import { randomUUID } from 'crypto';
+import { Injectable, Logger } from '@nestjs/common';
 
+// Stub: event broadcasting now done via WebSocket gateway and direct HTTP calls.
+// Keeping this class as a no-op so existing imports don't break during migration.
 @Injectable()
-export class EventProducerService implements OnModuleInit {
+export class EventProducerService {
   private readonly logger = new Logger(EventProducerService.name);
 
-  constructor(@Inject('KAFKA_PRODUCER') private readonly kafka: ClientKafka) {}
-
-  async onModuleInit() { await this.kafka.connect(); }
-
-  async emit<T>(topic: string, payload: T): Promise<void> {
-    const envelope: EventEnvelope<T> = {
-      eventId: randomUUID(),
-      eventType: topic,
-      source: 'orderbook-service',
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      payload,
-    };
-    this.kafka.emit(topic, envelope);
-    this.logger.debug(`Emitted ${topic}`);
+  async emit<T>(topic: string, _payload: T): Promise<void> {
+    this.logger.debug(`Event ${topic} (no-op — replaced by inline HTTP/WS calls)`);
   }
 }

@@ -29,6 +29,11 @@ export class ComplianceCheckService {
     approved: boolean;
     failureCode?: string;
   }> {
+    if (process.env['DEV_SKIP_COMPLIANCE'] === 'true') {
+      this.logger.warn(`DEV_SKIP_COMPLIANCE: pre-trade check bypassed for ${input.walletAddress}`);
+      return { approved: true };
+    }
+
     try {
       const response = await axios.post(
         `${this.complianceServiceUrl}/compliance/pre-trade`,
