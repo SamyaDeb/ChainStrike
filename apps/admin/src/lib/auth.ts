@@ -8,12 +8,15 @@ export interface AdminUser {
 
 export async function adminLogin(email: string, password: string): Promise<AdminUser> {
   const { data } = await api.post('/auth/login', { email, password });
-  if (!['ADMIN', 'COMPLIANCE_OFFICER'].includes(data.user?.role)) {
+  // Login response returns { accessToken, refreshToken, expiresIn } — no user object.
+  // Decode the JWT payload to get role without a round-trip.
+  const payload = JSON.parse(atob(data.accessToken.split('.')[1]));
+  if (!['ADMIN', 'COMPLIANCE_OFFICER'].includes(payload.role)) {
     throw new Error('Access denied. Admin credentials required.');
   }
   localStorage.setItem('admin_token', data.accessToken);
   localStorage.setItem('admin_refresh_token', data.refreshToken);
-  return data.user;
+  return { id: payload.sub, email: payload.email, role: payload.role };
 }
 
 export function adminLogout() {

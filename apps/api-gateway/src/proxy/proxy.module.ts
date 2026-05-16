@@ -30,6 +30,8 @@ export class ProxyModule implements NestModule {
           createProxyMiddleware({
             target,
             changeOrigin: true,
+            proxyTimeout: 180_000,
+            timeout: 180_000,
             // req.url is stripped by Express; use originalUrl to get the full path
             pathRewrite: (_path: string, req: Request) => {
               const orig = (req.originalUrl ?? req.url) as string;
