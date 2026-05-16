@@ -48,79 +48,102 @@ export class EscrowService {
         network: this.algoCfg.network,
       });
 
-      // Try pending pool first (works within ~5 minutes of confirmation),
-      // then fall back to indexer for older confirmed transactions.
-      let txn: any;
+      // Normalised txn fields extracted from either pending-pool or indexer response.
+      let type: string | undefined;
+      let senderStr: string | undefined;
+      let assetIndex: number | undefined;
+      let amount: bigint | undefined;
+      let receiverStr: string | undefined;
+
+      // Helper: decode an address field that may be a string, Uint8Array, or Address object
+      const addrToStr = (v: any): string => {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (v instanceof Uint8Array) return algosdk.encodeAddress(v);
+        if (typeof v.toString === 'function') {
+          const s = v.toString();
+          // If it looks like an Algorand address (58 chars, base32), trust it
+          if (/^[A-Z2-7]{58}$/.test(s)) return s;
+        }
+        // Last resort: try encoding as address public key
+        try { return algosdk.encodeAddress(v); } catch { return String(v); }
+      };
+
       try {
+        // Pending pool — works within ~5 minutes after confirmation.
+        // algosdk v3 decodes the response as raw msgpack fields (short names):
+        //   type='axfer', snd=Uint8Array, xaid=number, aamt=bigint, arcv=Uint8Array
         const txInfo = await algod.pendingTransactionInformation(escrowTxId).do();
         if (!txInfo.confirmedRound) {
           this.logger.warn(`Escrow TX ${escrowTxId} not yet confirmed`);
           return false;
         }
-        txn = txInfo.txn.txn;
+        const raw = txInfo.txn?.txn as any;
+        // algosdk v3 may return either short msgpack names OR decoded Transaction properties
+        type = raw?.type ?? raw?.['type'];
+        senderStr = addrToStr(raw?.snd ?? raw?.sender);
+        // Asset transfer fields
+        const xaid = raw?.xaid ?? raw?.assetTransfer?.assetIndex ?? raw?.['xaid'];
+        const aamt = raw?.aamt ?? raw?.assetTransfer?.amount ?? raw?.['aamt'];
+        const arcv = raw?.arcv ?? raw?.assetTransfer?.receiver ?? raw?.['arcv'];
+        assetIndex = xaid !== undefined ? Number(xaid) : undefined;
+        amount = aamt !== undefined ? BigInt(aamt) : undefined;
+        receiverStr = addrToStr(arcv);
+        this.logger.debug(`Pending pool TX ${escrowTxId}: type=${type} snd=${senderStr} xaid=${assetIndex} aamt=${amount} arcv=${receiverStr}`);
       } catch {
-        // Tx left the pending pool — look it up via indexer
+        // Tx left the pending pool — fall back to indexer
+        this.logger.debug(`TX ${escrowTxId} not in pending pool, falling back to indexer`);
         const INDEXER = process.env['ALGORAND_INDEXER_SERVER'] ?? 'https://testnet-idx.algonode.cloud';
         const indexer = new algosdk.Indexer('', INDEXER, 443);
         const result = await indexer.lookupTransactionByID(escrowTxId).do();
         const raw = result.transaction as any;
-        // algosdk v3 indexer returns camelCase field names
-        const xferRaw = raw.assetTransferTransaction ?? raw['asset-transfer-transaction'];
-        txn = {
-          type: raw.txType ?? raw['tx-type'],
-          sender: raw.sender,
-          assetTransfer: xferRaw
-            ? {
-                assetIndex: Number(xferRaw.assetId ?? xferRaw['asset-id']),
-                amount: BigInt(xferRaw.amount ?? 0),
-                receiver: xferRaw.receiver,
-              }
-            : undefined,
-        };
+        // Indexer uses camelCase: assetTransferTransaction or asset-transfer-transaction
+        const xferRaw = raw?.assetTransferTransaction ?? raw?.['asset-transfer-transaction'];
+        type = raw?.txType ?? raw?.['tx-type'];
+        senderStr = addrToStr(raw?.sender);
+        assetIndex = xferRaw ? Number(xferRaw.assetId ?? xferRaw['asset-id']) : undefined;
+        amount = xferRaw ? BigInt(xferRaw.amount ?? 0) : undefined;
+        receiverStr = addrToStr(xferRaw?.receiver);
+        this.logger.debug(`Indexer TX ${escrowTxId}: type=${type} snd=${senderStr} xaid=${assetIndex} aamt=${amount} arcv=${receiverStr}`);
       }
 
-      // Verify it's an asset transfer (USDC) — TransactionType enum
-      if (txn.type !== 'axfer') {
-        this.logger.warn(`Escrow TX ${escrowTxId} is not an asset transfer (type=${txn.type})`);
+      // Verify it's an asset transfer
+      if (type !== 'axfer') {
+        this.logger.warn(`Escrow TX ${escrowTxId} is not an asset transfer (type=${type})`);
         return false;
       }
 
-      // txn.assetTransfer holds the asset-transfer-specific fields
-      const xfer = txn.assetTransfer;
-      if (!xfer) {
-        this.logger.warn(`Escrow TX ${escrowTxId} missing assetTransfer fields`);
+      if (assetIndex === undefined || amount === undefined || !receiverStr) {
+        this.logger.warn(`Escrow TX ${escrowTxId} missing asset transfer fields`);
         return false;
       }
 
-      // Verify asset is USDC (assetIndex is bigint in v3)
-      if (Number(xfer.assetIndex) !== this.usdcAsaId) {
-        this.logger.warn(`Escrow TX ${escrowTxId} asset mismatch: ${xfer.assetIndex} !== ${this.usdcAsaId}`);
+      // Verify asset is USDC
+      if (assetIndex !== this.usdcAsaId) {
+        this.logger.warn(`Escrow TX ${escrowTxId} asset mismatch: ${assetIndex} !== ${this.usdcAsaId}`);
         return false;
       }
 
       // Verify sender is the buyer
-      const senderStr = typeof txn.sender === 'string' ? txn.sender : txn.sender.toString();
       if (senderStr !== expectedBuyerAddress) {
         this.logger.warn(`Escrow TX ${escrowTxId} sender mismatch: ${senderStr} !== ${expectedBuyerAddress}`);
         return false;
       }
 
-      // Verify receiver is the escrow contract or treasury wallet
+      // Verify receiver is the escrow contract address
       const expectedReceiver = this.escrowContractId
         ? algosdk.getApplicationAddress(this.escrowContractId).toString()
         : process.env['TREASURY_WALLET_ADDRESS'];
       if (!expectedReceiver) {
-        this.logger.warn('No escrow contract or treasury address configured');
+        this.logger.warn('No escrow contract configured (ESCROW_CONTRACT_APP_ID not set)');
         return false;
       }
-      const receiverStr = typeof xfer.receiver === 'string' ? xfer.receiver : xfer.receiver.toString();
       if (receiverStr !== expectedReceiver) {
         this.logger.warn(`Escrow TX ${escrowTxId} receiver mismatch: ${receiverStr} !== ${expectedReceiver}`);
         return false;
       }
 
-      // Verify amount (bigint in v3)
-      const amount = xfer.amount ?? 0n;
+      // Verify amount
       if (amount < expectedAmount) {
         this.logger.warn(`Escrow TX ${escrowTxId} amount too low: ${amount} < ${expectedAmount}`);
         return false;
@@ -134,7 +157,7 @@ export class EscrowService {
     }
   }
 
-  // ─── Record lock on escrow contract (admin-signed) ────────────────────────────
+  // ─── Record lock on escrow contract (admin-signed, ARC-4 ABI call) ───────────
   // Called after verifying the buyer's USDC transfer. Optional for testnet.
 
   async recordEscrowLock(
@@ -157,21 +180,28 @@ export class EscrowService {
 
       const suggestedParams = await algod.getTransactionParams().do();
 
-      const appCall = algosdk.makeApplicationNoOpTxnFromObject({
-        sender: this.adminAccount.addr,
-        appIndex: this.escrowContractId,
-        appArgs: [
-          new TextEncoder().encode('record_lock'),
-          new TextEncoder().encode(orderId),
-          new TextEncoder().encode(buyerAddress),
-          algosdk.encodeUint64(Number(amount)),
+      // Box key: keyPrefix 'e:' + orderId bytes (as defined in EscrowContract BoxMap)
+      const enc = new TextEncoder();
+      const boxKey = new Uint8Array([...enc.encode('e:'), ...enc.encode(orderId)]);
+
+      // ARC-4 ABI call: recordLock(byte[],address,uint64)void
+      const atc = new algosdk.AtomicTransactionComposer();
+      atc.addMethodCall({
+        appID: this.escrowContractId,
+        method: algosdk.ABIMethod.fromSignature('recordLock(byte[],address,uint64)void'),
+        methodArgs: [
+          enc.encode(orderId), // orderId: byte[]
+          buyerAddress,        // buyerAddress: address
+          amount,              // amount: uint64
         ],
+        sender: this.adminAccount.addr.toString(),
+        signer: algosdk.makeBasicAccountTransactionSigner(this.adminAccount),
         suggestedParams,
+        boxes: [{ appIndex: 0, name: boxKey }],
       });
 
-      const signed = appCall.signTxn(this.adminAccount.sk);
-      const { txid } = await algod.sendRawTransaction(signed).do();
-      const txId = txid;
+      const result = await atc.execute(algod, 4);
+      const txId = result.txIDs[0];
 
       this.logger.log(`Escrow lock recorded: orderId=${orderId}, txId=${txId}`);
       return txId;
@@ -181,7 +211,7 @@ export class EscrowService {
     }
   }
 
-  // ─── Return USDC to buyer on order cancellation ──────────────────────────────
+  // ─── Return USDC to buyer on order cancellation (ARC-4 ABI call) ─────────────
   // Optional for testnet.
 
   async returnToBuyer(orderId: string): Promise<string | null> {
@@ -200,19 +230,26 @@ export class EscrowService {
 
       const suggestedParams = await algod.getTransactionParams().do();
 
-      const appCall = algosdk.makeApplicationNoOpTxnFromObject({
-        sender: this.adminAccount.addr,
-        appIndex: this.escrowContractId,
-        appArgs: [
-          new TextEncoder().encode('return_to_buyer'),
-          new TextEncoder().encode(orderId),
+      const enc2 = new TextEncoder();
+      const boxKey2 = new Uint8Array([...enc2.encode('e:'), ...enc2.encode(orderId)]);
+
+      // ARC-4 ABI call: returnToBuyer(byte[])void — escrow issues 1 inner USDC transfer
+      const atc = new algosdk.AtomicTransactionComposer();
+      atc.addMethodCall({
+        appID: this.escrowContractId,
+        method: algosdk.ABIMethod.fromSignature('returnToBuyer(byte[])void'),
+        methodArgs: [
+          enc2.encode(orderId), // orderId: byte[]
         ],
-        suggestedParams,
+        sender: this.adminAccount.addr.toString(),
+        signer: algosdk.makeBasicAccountTransactionSigner(this.adminAccount),
+        suggestedParams: { ...suggestedParams, fee: 2000n, flatFee: true },
+        appForeignAssets: [this.usdcAsaId],
+        boxes: [{ appIndex: 0, name: boxKey2 }],
       });
 
-      const signed = appCall.signTxn(this.adminAccount.sk);
-      const { txid } = await algod.sendRawTransaction(signed).do();
-      const txId = txid;
+      const result = await atc.execute(algod, 4);
+      const txId = result.txIDs[0];
 
       this.logger.log(`Escrow returned to buyer: orderId=${orderId}, txId=${txId}`);
       return txId;

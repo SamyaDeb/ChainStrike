@@ -9,6 +9,8 @@ import { MatchingService } from '../matching/matching.service';
 import { InMemoryOrderBookStore } from '../orderbook/in-memory-order-book.store';
 import { PlaceOrderDto, OrderType } from './dto/place-order.dto';
 import { PlatformConstants } from '@chainstrike/config';
+import { getAlgodClient } from '@chainstrike/algorand';
+import { algorandConfig } from '@chainstrike/config';
 
 @Injectable()
 export class OrderService {
@@ -50,6 +52,41 @@ export class OrderService {
       const lower = refPrice - (refPrice * bandPct) / 100n;
       if (price > upper || price < lower) {
         throw new BadRequestException('Order price outside 20% band of reference price');
+      }
+    }
+
+    // ─── Algorand opt-in pre-checks ──────────────────────────────────────────────
+    // Fail early with a clear message rather than letting settlement discover it later.
+    const skipCompliance = process.env['DEV_SKIP_COMPLIANCE'] === 'true';
+    if (!skipCompliance) {
+      const algoCfg = algorandConfig();
+      const algod = getAlgodClient({
+        host: algoCfg.algodHost,
+        port: algoCfg.algodPort,
+        token: algoCfg.algodToken,
+        network: algoCfg.network,
+      });
+      if (dto.side === 'BUY') {
+        const buyerAsaInfo = await algod
+          .accountAssetInformation(dto.walletAddress, market.asaId)
+          .do()
+          .catch(() => null);
+        if (!buyerAsaInfo) {
+          throw new BadRequestException(
+            `Wallet must opt in to ASA ${market.asaId} before placing a BUY order`,
+          );
+        }
+      }
+      if (dto.side === 'SELL') {
+        const sellerUsdcInfo = await algod
+          .accountAssetInformation(dto.walletAddress, algoCfg.usdcAssetId)
+          .do()
+          .catch(() => null);
+        if (!sellerUsdcInfo) {
+          throw new BadRequestException(
+            `Wallet must opt in to USDC (ASA ${algoCfg.usdcAssetId}) before placing a SELL order`,
+          );
+        }
       }
     }
 

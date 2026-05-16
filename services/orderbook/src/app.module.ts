@@ -21,7 +21,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
         ALGORAND_ADMIN_MNEMONIC: Joi.string().required(),
         ESCROW_CONTRACT_APP_ID: Joi.string().required(),
         SETTLEMENT_SERVICE_URL: Joi.string().default('http://localhost:3005'),
-        TREASURY_WALLET_ADDRESS: Joi.string().required(),
+        TREASURY_WALLET_ADDRESS: Joi.string().optional(),
         COMPLIANCE_SERVICE_URL: Joi.string().default('http://localhost:3004'),
       }).options({ allowUnknown: true }),
     }),
