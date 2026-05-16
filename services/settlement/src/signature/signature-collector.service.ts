@@ -34,8 +34,11 @@ export class SignatureCollectorService {
   private readonly pending = new Map<string, PendingSignature>();
   private readonly orderbookUrl: string;
 
+  private readonly internalSecret: string;
+
   constructor() {
     this.orderbookUrl = process.env.ORDERBOOK_SERVICE_URL ?? 'http://localhost:3003';
+    this.internalSecret = process.env.INTERNAL_SECRET ?? '';
   }
 
   // ─── Request signatures from seller via WebSocket ─────────────────────────────
@@ -112,7 +115,7 @@ export class SignatureCollectorService {
       sellerWalletAddress,
       unsignedTxnGroup: unsignedB64,
       expiresAt: Date.now() + 30000,
-    });
+    }, { headers: { 'x-internal-secret': this.internalSecret } });
 
     this.logger.debug(`Forwarded sign request to orderbook for trade ${tradeId}`);
   }

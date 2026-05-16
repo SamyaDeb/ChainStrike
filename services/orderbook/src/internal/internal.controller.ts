@@ -1,5 +1,6 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { InternalGuard } from './internal.guard';
 import { OrderbookGateway } from '../gateway/orderbook.gateway';
 import { MarketService } from '../market/market.service';
 import { MarketRepository } from '../market/market.repository';
@@ -14,6 +15,7 @@ interface SignRequestPayload {
   expiresAt: number;
 }
 
+@UseGuards(InternalGuard)
 @Controller('internal')
 export class InternalController {
   private readonly logger = new Logger(InternalController.name);

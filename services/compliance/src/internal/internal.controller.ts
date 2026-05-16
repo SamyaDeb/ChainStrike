@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Logger, UseGuards } from '@nestjs/common';
+import { InternalGuard } from './internal.guard';
 import { WhitelistService } from '../whitelist/whitelist.service';
 
 interface WhitelistAddPayload {
@@ -16,6 +17,7 @@ interface WhitelistRemovePayload {
   reason?: string;
 }
 
+@UseGuards(InternalGuard)
 @Controller('internal')
 export class InternalController {
   private readonly logger = new Logger(InternalController.name);

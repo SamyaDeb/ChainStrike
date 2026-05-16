@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Logger, UseGuards } from '@nestjs/common';
+import { InternalGuard } from './internal.guard';
 import { SettlementService } from '../settlement/settlement.service';
 
 interface SettlePayload {
@@ -17,6 +18,7 @@ interface SettlePayload {
   price: string;
 }
 
+@UseGuards(InternalGuard)
 @Controller('internal')
 export class InternalController {
   private readonly logger = new Logger(InternalController.name);
