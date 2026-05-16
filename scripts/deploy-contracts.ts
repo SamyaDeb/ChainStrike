@@ -185,15 +185,90 @@ async function main() {
     console.warn(`      Skipped: ${err.message}`);
   }
 
+  // ─── Deploy IssuanceLiquidityEscrow ─────────────────────────────────────────
+  console.log('\n[4/4] Deploying IssuanceLiquidityEscrow contract…');
+  let issuanceEscrowAppId = 0;
+  let issuanceEscrowAddress = '';
+  try {
+    const approvalPath = path.resolve(process.cwd(), 'contracts/issuance-escrow/src/out/IssuanceLiquidityEscrow.approval.teal');
+    const clearPath = path.resolve(process.cwd(), 'contracts/issuance-escrow/src/out/IssuanceLiquidityEscrow.clear.teal');
+    const approvalTeal = fs.readFileSync(approvalPath, 'utf-8');
+    const clearTeal = fs.readFileSync(clearPath, 'utf-8');
+    const approvalResult = await client.compile(approvalTeal).do();
+    const clearResult = await client.compile(clearTeal).do();
+    const approval = new Uint8Array(Buffer.from(approvalResult.result, 'base64'));
+    const clear = new Uint8Array(Buffer.from(clearResult.result, 'base64'));
+
+    const sp2 = await client.getTransactionParams().do();
+
+    // Deploy: createApplication(address,uint64)void
+    const deployTxn = algosdk.makeApplicationCreateTxnFromObject({
+      sender: account.addr.toString(),
+      approvalProgram: approval,
+      clearProgram: clear,
+      numLocalInts: 0,
+      numLocalByteSlices: 0,
+      numGlobalInts: 2,       // usdcAsaId, isPaused
+      numGlobalByteSlices: 1, // admin (Account = 32-byte pubkey)
+      onComplete: algosdk.OnApplicationComplete.NoOpOC,
+      suggestedParams: sp2,
+      appArgs: [
+        Buffer.from('cd19f1a6', 'hex'), // createApplication(address,uint64)void
+        adminPk,
+        algosdk.encodeUint64(usdcAsaId),
+      ],
+    });
+
+    const signedDeploy = deployTxn.signTxn(account.sk);
+    const { txid: deployTxid } = await client.sendRawTransaction(signedDeploy).do();
+    const deployResult = await algosdk.waitForConfirmation(client, deployTxid, 4);
+    issuanceEscrowAppId = Number(deployResult.applicationIndex ?? deployResult['application-index']);
+    issuanceEscrowAddress = algosdk.getApplicationAddress(issuanceEscrowAppId).toString();
+    console.log(`      IssuanceLiquidityEscrow App ID: ${issuanceEscrowAppId}`);
+    console.log(`      IssuanceLiquidityEscrow Address: ${issuanceEscrowAddress}`);
+
+    // Fund contract (0.2 ALGO: 0.1 min balance + 0.1 USDC opt-in MBR)
+    const sp3 = await client.getTransactionParams().do();
+    const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      sender: account.addr.toString(),
+      receiver: issuanceEscrowAddress,
+      amount: 200_000, // 0.2 ALGO
+      suggestedParams: sp3,
+    });
+
+    // Call optIntoUsdc() — inner txn opts the contract into USDC on-chain
+    // The inner axfer has fee:0 so the outer app call must carry 2x minFee
+    const sp3opt = { ...sp3, fee: 2000n, flatFee: true };
+    const optInTxn = algosdk.makeApplicationNoOpTxnFromObject({
+      sender: account.addr.toString(),
+      appIndex: issuanceEscrowAppId,
+      appArgs: [Buffer.from('ca329aeb', 'hex')], // optIntoUsdc()void
+      foreignAssets: [usdcAsaId],
+      suggestedParams: sp3opt,
+    });
+
+    algosdk.assignGroupID([fundTxn, optInTxn]);
+    const signedGroup = [fundTxn, optInTxn].map((t) => t.signTxn(account.sk));
+    const { txid: groupTxid } = await client.sendRawTransaction(signedGroup).do();
+    await algosdk.waitForConfirmation(client, groupTxid, 4);
+    console.log(`      Funded + opted into USDC: ${groupTxid}`);
+  } catch (err: any) {
+    console.warn(`      Skipped: ${err.message}`);
+  }
+
   // ─── Write deployed IDs to .env ───────────────────────────────────────────
   updateEnv('WHITELIST_REGISTRY_APP_ID', String(whitelistAppId));
   updateEnv('ESCROW_CONTRACT_APP_ID', String(escrowAppId));
   updateEnv('TRANSFER_RESTRICTION_APP_ID', String(transferRestrictionAppId));
+  updateEnv('ISSUANCE_ESCROW_APP_ID', String(issuanceEscrowAppId));
+  updateEnv('ISSUANCE_ESCROW_ADDRESS', issuanceEscrowAddress);
 
   console.log('\n✅ Deployment complete!');
-  console.log(`\n  WhitelistRegistry:     ${whitelistAppId}`);
-  console.log(`  Escrow:                ${escrowAppId}`);
-  console.log(`  TransferRestriction:   ${transferRestrictionAppId}`);
+  console.log(`\n  WhitelistRegistry:          ${whitelistAppId}`);
+  console.log(`  Escrow (trading):           ${escrowAppId}`);
+  console.log(`  TransferRestriction:        ${transferRestrictionAppId}`);
+  console.log(`  IssuanceLiquidityEscrow:    ${issuanceEscrowAppId}`);
+  console.log(`  IssuanceEscrow address:     ${issuanceEscrowAddress}`);
   console.log('\nNext steps:');
   console.log('  1. .env has been updated with contract IDs');
   console.log('  2. Run: npm run seed:testnet');
