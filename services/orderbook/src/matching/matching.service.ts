@@ -29,6 +29,7 @@ export interface MatchResult {
 export class MatchingService implements OnApplicationBootstrap {
   private readonly logger = new Logger(MatchingService.name);
   private readonly settlementServiceUrl: string;
+  private readonly internalHeaders: Record<string, string>;
   private readonly feeRate = 0.0025;
   private readonly assetLocks = new Map<string, Mutex>();
 
@@ -42,6 +43,9 @@ export class MatchingService implements OnApplicationBootstrap {
       'SETTLEMENT_SERVICE_URL',
       'http://localhost:3005',
     );
+    this.internalHeaders = {
+      'x-internal-secret': this.config.get<string>('INTERNAL_SECRET', ''),
+    };
   }
 
   private getLock(assetId: string): Mutex {
@@ -169,7 +173,7 @@ export class MatchingService implements OnApplicationBootstrap {
             usdcAmount: totalValue.toString(),
             platformFee: platformFee.toString(),
             price: match.price.toString(),
-          }, { timeout: 5000 });
+          }, { timeout: 5000, headers: this.internalHeaders });
 
           this.gateway.broadcastTrade(entry.assetId, {
             price: match.price.toString(),
@@ -183,6 +187,27 @@ export class MatchingService implements OnApplicationBootstrap {
           );
         } catch (err) {
           this.logger.error(`Settlement call failed for trade ${match.tradeId}: ${(err as Error).message}`);
+        }
+      }
+
+      // ── Phase 7: IOC/FOK DB cancellation ─────────────────────────────────────
+      // match() already removes the order from the in-memory book for IOC/FOK.
+      // Reflect that cancellation in the DB so order status is not left as ACCEPTED.
+      if (entry.timeInForce === 'IOC' || entry.timeInForce === 'FOK') {
+        const stillInBook = this.bookStore.getEntry(entry.assetId, entry.side, entry.orderId);
+        if (!stillInBook) {
+          const totalFilled = matches.reduce((sum, m) => sum + m.quantity, 0n);
+          if (totalFilled < entry.quantity) {
+            try {
+              await this.prisma.order.update({
+                where: { id: entry.orderId },
+                data: { status: 'CANCELLED' } as any,
+              });
+              this.logger.log(`${entry.timeInForce} order ${entry.orderId} cancelled in DB (filled ${totalFilled}/${entry.quantity})`);
+            } catch (err) {
+              this.logger.error(`Failed to cancel ${entry.timeInForce} order ${entry.orderId} in DB: ${(err as Error).message}`);
+            }
+          }
         }
       }
 
@@ -308,7 +333,7 @@ export class MatchingService implements OnApplicationBootstrap {
           usdcAmount: usdcAmount.toString(),
           platformFee: trade.platformFee.toString(),
           price: trade.price.toString(),
-        }, { timeout: 5000 });
+        }, { timeout: 5000, headers: this.internalHeaders });
       } catch (err) {
         this.logger.warn(`Settlement retry failed for trade ${trade.id}: ${(err as Error).message}`);
       }
