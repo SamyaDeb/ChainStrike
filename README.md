@@ -33,7 +33,6 @@ ChainStrike is a full-stack monorepo with:
 
 ### Prerequisites
 - Node.js 18+
-- Docker & Docker Compose
 - Algorand Sandbox (optional, for local testing)
 
 ### Development
@@ -58,19 +57,6 @@ npm run build
 
 # Run tests
 npm run test
-```
-
-### Docker Deployment
-
-```bash
-# Start entire stack with Docker Compose
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
 ```
 
 ## 📋 Core Features

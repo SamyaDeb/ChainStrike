@@ -28,7 +28,7 @@ export const Topics = {
   ORDER_REJECTED: 'order.rejected',
   ORDER_EXPIRED: 'order.expired',
 
-  // Matching events (published by: matching-engine)
+  // Matching events (published by: orderbook-service)
   ORDER_MATCHED: 'order.matched',
   ORDER_PARTIALLY_FILLED: 'order.partially_filled',
 
@@ -62,8 +62,6 @@ export const ConsumerGroups = {
 
   ORDERBOOK_WHITELIST: 'orderbook-service.whitelist-processor',
   ORDERBOOK_ASSET: 'orderbook-service.asset-processor',
-
-  MATCHING_ORDERS: 'matching-engine.order-processor',
 
   SETTLEMENT_MATCHES: 'settlement-service.match-processor',
 
