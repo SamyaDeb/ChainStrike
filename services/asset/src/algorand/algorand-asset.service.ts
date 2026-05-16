@@ -10,7 +10,6 @@ export class AlgorandAssetService {
   private readonly logger = new Logger(AlgorandAssetService.name);
   private readonly algodClient: algosdk.Algodv2;
   private readonly adminAccount: algosdk.Account;
-  private readonly treasuryAccount: algosdk.Account;
   private readonly issuanceEscrowAppId: number;
   private readonly usdcAsaId: number;
 
@@ -24,9 +23,6 @@ export class AlgorandAssetService {
     const mnemonic = this.config.getOrThrow<string>('ALGORAND_ADMIN_MNEMONIC');
     this.adminAccount = algosdk.mnemonicToSecretKey(mnemonic);
 
-    const treasuryMnemonic = this.config.getOrThrow<string>('TREASURY_MNEMONIC');
-    this.treasuryAccount = algosdk.mnemonicToSecretKey(treasuryMnemonic);
-
     this.issuanceEscrowAppId = parseInt(this.config.get<string>('ISSUANCE_ESCROW_APP_ID', '0'), 10);
     this.usdcAsaId = this.config.get<string>('ALGORAND_NETWORK') === 'mainnet' ? 31566704 : 10458941;
   }
@@ -35,13 +31,9 @@ export class AlgorandAssetService {
     return this.adminAccount.addr.toString();
   }
 
-  getTreasuryAddress(): string {
-    return this.treasuryAccount.addr.toString();
-  }
-
   // ─── Verify issuer's USDC liquidity deposit on-chain ─────────────────────────
   // Checks that the txId represents a confirmed USDC transfer from the issuer
-  // to the platform treasury. Mirrors EscrowService.verifyEscrowLock() logic.
+  // to the issuance escrow contract. Mirrors EscrowService.verifyEscrowLock() logic.
 
   async verifyLiquidityDeposit(params: {
     txId: string;
@@ -50,34 +42,51 @@ export class AlgorandAssetService {
     usdcAsaId: number;
   }): Promise<boolean> {
     try {
+      this.logger.debug(`Verifying liquidity deposit: txId=${params.txId}, sender=${params.expectedSender}, amount=${params.expectedAmountMicroUsdc}`);
+
       // Expected receiver is the IssuanceLiquidityEscrow contract address
+      if (!this.issuanceEscrowAppId || this.issuanceEscrowAppId === 0) {
+        this.logger.error(`ISSUANCE_ESCROW_APP_ID not configured (${this.issuanceEscrowAppId})`);
+        return false;
+      }
+
       const escrowAddress = algosdk.getApplicationAddress(this.issuanceEscrowAppId).toString();
+      this.logger.debug(`Escrow address: ${escrowAddress}`);
+
       let txn: any;
       try {
+        this.logger.debug(`Looking up pending transaction: ${params.txId}`);
         const txInfo = await this.algodClient.pendingTransactionInformation(params.txId).do();
         if (!txInfo.confirmedRound) {
           this.logger.warn(`Liquidity deposit TX ${params.txId} not yet confirmed`);
           return false;
         }
         txn = txInfo.txn?.txn ?? txInfo.txn;
-      } catch {
-        const indexerServer = this.config.get<string>('ALGORAND_INDEXER_SERVER', 'https://testnet-idx.algonode.cloud');
-        const indexer = new algosdk.Indexer('', indexerServer, 443);
-        const result = await indexer.lookupTransactionByID(params.txId).do();
-        const raw = result.transaction as any;
-        // algosdk v3 indexer returns camelCase field names
-        const xferRaw = raw.assetTransferTransaction ?? raw['asset-transfer-transaction'];
-        txn = {
-          type: raw.txType ?? raw['tx-type'],
-          sender: raw.sender,
-          assetTransfer: xferRaw
-            ? {
-                assetIndex: Number(xferRaw.assetId ?? xferRaw['asset-id']),
-                amount: BigInt(xferRaw.amount ?? 0),
-                receiver: xferRaw.receiver,
-              }
-            : undefined,
-        };
+      } catch (pendingErr) {
+        this.logger.debug(`Pending transaction lookup failed, trying indexer: ${(pendingErr as Error).message}`);
+        try {
+          const indexerServer = this.config.get<string>('ALGORAND_INDEXER_SERVER', 'https://testnet-idx.algonode.cloud');
+          const indexer = new algosdk.Indexer('', indexerServer, 443);
+          const result = await indexer.lookupTransactionByID(params.txId).do();
+          const raw = result.transaction as any;
+          // algosdk v3 indexer returns camelCase field names
+          const xferRaw = raw.assetTransferTransaction ?? raw['asset-transfer-transaction'];
+          txn = {
+            type: raw.txType ?? raw['tx-type'],
+            sender: raw.sender,
+            assetTransfer: xferRaw
+              ? {
+                  assetIndex: Number(xferRaw.assetId ?? xferRaw['asset-id']),
+                  amount: BigInt(xferRaw.amount ?? 0),
+                  receiver: xferRaw.receiver,
+                }
+              : undefined,
+          };
+          this.logger.debug(`Transaction found in indexer: type=${txn.type}`);
+        } catch (indexerErr) {
+          this.logger.error(`Failed to lookup transaction in indexer: ${(indexerErr as Error).message}`);
+          throw indexerErr;
+        }
       }
 
       if (txn.type !== 'axfer') {
@@ -118,7 +127,7 @@ export class AlgorandAssetService {
   }
 
   // ─── Opt vault contract into USDC (inner-txn via app call) ───────────────────
-  // Must be called before forwarding treasury USDC to the vault address.
+  // Must be called before releasing escrow USDC to the vault address.
 
   async optVaultIntoUsdc(vaultAppId: number, usdcAsaId: number): Promise<void> {
     const vaultAddress = algosdk.getApplicationAddress(vaultAppId).toString();
@@ -149,26 +158,6 @@ export class AlgorandAssetService {
     const { txid } = await this.algodClient.sendRawTransaction(signed).do();
     await algosdk.waitForConfirmation(this.algodClient, txid, 4);
     this.logger.log(`Vault ${vaultAppId} opted into USDC (txId=${txid})`);
-  }
-
-  // ─── Forward USDC from treasury to vault address ─────────────────────────────
-  // Treasury key signs the transfer. Vault must be opted into USDC first.
-
-  async forwardUsdcToVault(vaultAddress: string, amount: bigint, usdcAsaId: number): Promise<string> {
-    const sp = await this.algodClient.getTransactionParams().do();
-    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-      sender: this.treasuryAccount.addr.toString(),
-      receiver: vaultAddress,
-      assetIndex: usdcAsaId,
-      amount,
-      note: new TextEncoder().encode('ChainStrike — issuer liquidity collateral'),
-      suggestedParams: sp,
-    });
-    const signed = txn.signTxn(this.treasuryAccount.sk);
-    const { txid } = await this.algodClient.sendRawTransaction(signed).do();
-    await algosdk.waitForConfirmation(this.algodClient, txid, 4);
-    this.logger.log(`Treasury forwarded ${amount} micro-USDC to vault ${vaultAddress} (txId=${txid})`);
-    return txid;
   }
 
   // ─── Record issuance lock in escrow contract (admin-signed) ─────────────────
