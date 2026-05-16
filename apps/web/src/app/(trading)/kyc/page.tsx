@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWallet } from '@txnlab/use-wallet-react';
+import algosdk from 'algosdk';
 
 export default function KycPage() {
-  const { activeAddress, signBytes } = useWallet();
+  const { activeAddress, signTransactions } = useWallet();
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
 
   // Get KYC status
@@ -34,21 +35,36 @@ export default function KycPage() {
   // Connect wallet
   const connectWallet = useMutation({
     mutationFn: async () => {
-      if (!activeAddress) throw new Error('No wallet connected');
+      if (!activeAddress || !signTransactions) throw new Error('No wallet connected');
 
       // Get challenge from backend
       const { data: challengeData } = await api.post('/wallets/challenge', { walletAddress: activeAddress });
       setChallengeToken(challengeData.challenge);
 
-      // Sign challenge with wallet
-      const encoded = new TextEncoder().encode(challengeData.challenge);
-      const signed = await signBytes(encoded, activeAddress);
+      // Build a 0-ALGO self-payment transaction with challenge as note
+      const algodClient = new algosdk.Algodv2(
+        process.env.NEXT_PUBLIC_ALGORAND_ALGOD_TOKEN ?? '',
+        process.env.NEXT_PUBLIC_ALGORAND_ALGOD_SERVER ?? 'https://testnet-api.algonode.cloud',
+        Number(process.env.NEXT_PUBLIC_ALGORAND_ALGOD_PORT ?? '443'),
+      );
+      const suggestedParams = await algodClient.getTransactionParams().do();
+      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+        sender: activeAddress,
+        receiver: activeAddress,
+        amount: 0,
+        note: new TextEncoder().encode(challengeData.challenge),
+        suggestedParams,
+      });
+
+      const [signed] = await signTransactions([algosdk.encodeUnsignedTransaction(txn)]);
+      if (!signed) throw new Error('Wallet declined to sign');
+      const signature = Buffer.from(signed).toString('base64');
 
       // Verify signature on backend
       await api.post('/wallets/connect', {
         walletAddress: activeAddress,
         challenge: challengeData.challenge,
-        signature: Buffer.from(signed).toString('base64'),
+        signature,
       });
     },
   });

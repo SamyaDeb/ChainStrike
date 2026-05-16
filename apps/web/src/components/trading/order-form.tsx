@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWallet } from '@txnlab/use-wallet-react';
@@ -22,6 +22,29 @@ const ALGOD_SERVER = process.env.NEXT_PUBLIC_ALGORAND_ALGOD_SERVER ?? 'https://t
 const ALGOD_PORT = Number(process.env.NEXT_PUBLIC_ALGORAND_ALGOD_PORT ?? '443');
 const ALGOD_TOKEN = process.env.NEXT_PUBLIC_ALGORAND_ALGOD_TOKEN ?? '';
 const DEV_SKIP_ESCROW = process.env.NEXT_PUBLIC_DEV_SKIP_ESCROW === 'true';
+const IS_TESTNET = (process.env.NEXT_PUBLIC_ALGORAND_NETWORK ?? 'testnet') !== 'mainnet';
+
+function parseAlgorandError(err: unknown): string {
+  const msg = (err as any)?.response?.data?.message
+    ?? (err as any)?.message
+    ?? String(err);
+  if (msg.includes('underflow on subtracting')) {
+    const match = msg.match(/subtracting (\d+) from sender amount (\d+)/);
+    if (match) {
+      const needed = (Number(match[1]) / 1_000_000).toFixed(2);
+      const have = (Number(match[2]) / 1_000_000).toFixed(2);
+      return `Insufficient USDC: you need ${needed} USDC but your wallet only has ${have} USDC. Click "Get Test USDC" to top up.`;
+    }
+    return 'Insufficient USDC balance. Click "Get Test USDC" to top up your wallet.';
+  }
+  if (msg.includes('must optin')) {
+    return 'Wallet must opt in to USDC first. Try placing the order again.';
+  }
+  if (msg.includes('overspend')) {
+    return 'Insufficient ALGO for transaction fees. Add ALGO to your wallet.';
+  }
+  return msg;
+}
 
 export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
   const { activeAddress, signTransactions, algodClient } = useWallet();
@@ -32,6 +55,71 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
   const [tif, setTif] = useState<TimeInForce>('GTC');
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [dispensing, setDispensing] = useState(false);
+  const [dispenseMsg, setDispenseMsg] = useState<string | null>(null);
+
+  const client = algodClient ?? new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
+
+  const fetchUsdcBalance = useCallback(async () => {
+    if (!activeAddress) { setUsdcBalance(null); return; }
+    try {
+      const info = await client.accountAssetInformation(activeAddress, USDC_ASA_ID).do();
+      const holding = info.assetHolding ?? (info as any)['asset-holding'];
+      setUsdcBalance(holding ? Number(holding.amount) / 1_000_000 : 0);
+    } catch {
+      setUsdcBalance(0);
+    }
+  }, [activeAddress]);
+
+  useEffect(() => { fetchUsdcBalance(); }, [fetchUsdcBalance]);
+
+  const priceNum = parseFloat(price) || (referencePriceUsdc ? Number(referencePriceUsdc) / 1_000_000 : 0);
+  const estimatedTotal = price && quantity
+    ? parseFloat(price) * parseFloat(quantity)
+    : null;
+
+  const maxAffordableQty = usdcBalance !== null && priceNum > 0
+    ? Math.floor((usdcBalance / priceNum) * 1_000_000) / 1_000_000
+    : null;
+
+  const insufficientUsdc = side === 'BUY' && !DEV_SKIP_ESCROW && usdcBalance !== null
+    && estimatedTotal !== null && usdcBalance < estimatedTotal;
+
+  const handleDispenseUsdc = async () => {
+    if (!activeAddress) return;
+    setDispensing(true);
+    setDispenseMsg(null);
+    try {
+      // First opt wallet into USDC if needed
+      const sp = await client.getTransactionParams().do();
+      const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAddress,
+        receiver: activeAddress,
+        assetIndex: USDC_ASA_ID,
+        amount: 0n,
+        suggestedParams: sp,
+        note: new TextEncoder().encode('USDC opt-in'),
+      });
+      try {
+        if (signTransactions) {
+          const signed = (await signTransactions([algosdk.encodeUnsignedTransaction(optInTxn)])).filter((s): s is Uint8Array => s !== null);
+          const { txid } = await client.sendRawTransaction(signed).do();
+          await algosdk.waitForConfirmation(client, txid, 4);
+        }
+      } catch {
+        // Already opted in — continue
+      }
+
+      const res = await api.post('/assets/dispense-usdc', { walletAddress: activeAddress });
+      setDispenseMsg(`Sent ${res.data.amount ?? 50} USDC to your wallet (txId: ${res.data.txId?.slice(0, 12)}…)`);
+      setTimeout(() => fetchUsdcBalance(), 3000);
+    } catch (err: any) {
+      setDispenseMsg(`Failed: ${err.response?.data?.message ?? err.message}`);
+    } finally {
+      setDispensing(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -52,29 +140,84 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
           1_000_000
         ));
 
-        if (totalUsdc <= 0n) {
-          throw new Error('Invalid order total');
+        if (totalUsdc <= 0n) throw new Error('Invalid order total');
+
+        // ─── Pre-flight balance check ─────────────────────────────────────────
+        const needed = Number(totalUsdc) / 1_000_000;
+        if (usdcBalance !== null && usdcBalance < needed) {
+          throw new Error(
+            `Insufficient USDC: you need ${needed.toFixed(2)} USDC but your wallet has ${usdcBalance.toFixed(2)} USDC.` +
+            (IS_TESTNET ? ' Click "Get Test USDC" to top up.' : '')
+          );
         }
 
-        const client = algodClient ?? new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
+        // ─── Ensure escrow has opted into USDC ────────────────────────────────
+        await api.post('/assets/setup-escrow');
+
+        // ─── Ensure investor wallet has opted into USDC ───────────────────────
+        let investorOptedIn = false;
+        try {
+          const assetInfo = await client.accountAssetInformation(activeAddress, USDC_ASA_ID).do();
+          investorOptedIn = !!(assetInfo.assetHolding ?? (assetInfo as any)['asset-holding']);
+        } catch { investorOptedIn = false; }
+
         const suggestedParams = await client.getTransactionParams().do();
 
+        if (!investorOptedIn) {
+          const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+            sender: activeAddress,
+            receiver: activeAddress,
+            assetIndex: USDC_ASA_ID,
+            amount: 0n,
+            suggestedParams,
+            note: new TextEncoder().encode('USDC opt-in'),
+          });
+          const signedOptIn = (await signTransactions([algosdk.encodeUnsignedTransaction(optInTxn)])).filter((s): s is Uint8Array => s !== null);
+          const { txid: optInTxId } = await client.sendRawTransaction(signedOptIn).do();
+          await algosdk.waitForConfirmation(client, optInTxId, 4);
+        }
+
+        // ─── Ensure investor wallet has opted into the RWA token ─────────────
+        // Required: settlement sends tokens via clawback to buyer — buyer must be opted in
+        if (asaId) {
+          let asaOptedIn = false;
+          try {
+            const asaInfo = await client.accountAssetInformation(activeAddress, asaId).do();
+            asaOptedIn = !!(asaInfo.assetHolding ?? (asaInfo as any)['asset-holding']);
+          } catch { asaOptedIn = false; }
+
+          if (!asaOptedIn) {
+            const asaOptInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+              sender: activeAddress,
+              receiver: activeAddress,
+              assetIndex: asaId,
+              amount: 0n,
+              suggestedParams,
+              note: new TextEncoder().encode('RWA token opt-in'),
+            });
+            const signedAsaOptIn = (await signTransactions([algosdk.encodeUnsignedTransaction(asaOptInTxn)])).filter((s): s is Uint8Array => s !== null);
+            const { txid: asaOptInTxId } = await client.sendRawTransaction(signedAsaOptIn).do();
+            await algosdk.waitForConfirmation(client, asaOptInTxId, 4);
+          }
+        }
+
+        // ─── Send USDC to escrow ──────────────────────────────────────────────
         const usdcTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-          from: activeAddress,
-          to: ESCROW_ADDRESS,
+          sender: activeAddress,
+          receiver: ESCROW_ADDRESS,
           assetIndex: USDC_ASA_ID,
-          amount: Number(totalUsdc),
+          amount: totalUsdc,
           suggestedParams,
           note: new TextEncoder().encode(JSON.stringify({ action: 'escrow_lock', assetId })),
         });
 
-        const signed = await signTransactions([usdcTransfer.toByte()]);
-        const { txId } = await client.sendRawTransaction(signed).do();
-        await algosdk.waitForConfirmation(client, txId, 4);
-        escrowTxId = txId;
+        const signed = (await signTransactions([algosdk.encodeUnsignedTransaction(usdcTransfer)])).filter((s): s is Uint8Array => s !== null);
+        const { txid } = await client.sendRawTransaction(signed).do();
+        await algosdk.waitForConfirmation(client, txid, 4);
+        escrowTxId = txid;
       }
 
-      // ─── Place order ─────────────────────────────────────────────────────────
+      // ─── Place order in orderbook ─────────────────────────────────────────────
       const { data } = await api.post('/orders', {
         assetId,
         side,
@@ -89,13 +232,15 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orderbook', assetId] });
       setPrice('');
       setQuantity('');
+      fetchUsdcBalance();
     },
   });
 
-  const estimatedTotal = price && quantity
-    ? (parseFloat(price) * parseFloat(quantity)).toFixed(2)
+  const errorMessage = mutation.isError
+    ? parseAlgorandError(mutation.error)
     : null;
 
   return (
@@ -143,16 +288,43 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
         </select>
       </div>
 
+      {/* USDC balance row */}
+      {activeAddress && side === 'BUY' && !DEV_SKIP_ESCROW && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">
+            USDC balance:&nbsp;
+            <span className={`font-medium ${insufficientUsdc ? 'text-red-400' : 'text-white'}`}>
+              {usdcBalance !== null ? `$${usdcBalance.toFixed(2)}` : '—'}
+            </span>
+          </span>
+          {IS_TESTNET && (
+            <button
+              onClick={handleDispenseUsdc}
+              disabled={dispensing}
+              className="text-xs px-2 py-0.5 rounded border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+            >
+              {dispensing ? 'Sending…' : 'Get Test USDC'}
+            </button>
+          )}
+        </div>
+      )}
+      {dispenseMsg && (
+        <p className={`text-xs ${dispenseMsg.startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>
+          {dispenseMsg}
+        </p>
+      )}
+
       {/* Price input (LIMIT only) */}
       {orderType === 'LIMIT' && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Price (USDC)</label>
+          <label className="block text-xs text-gray-500 mb-1">Price (USDC per token)</label>
           <input
             type="number"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder={referencePriceUsdc ? (Number(referencePriceUsdc) / 1_000_000).toFixed(2) : '0.00'}
-            step="0.000001"
+            step="0.01"
+            min="0"
             className="w-full bg-[#0F1117] border border-[#2A2D3A] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -160,63 +332,85 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
 
       {/* Quantity */}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Quantity (tokens)</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-gray-500">Quantity (tokens)</label>
+          {side === 'BUY' && maxAffordableQty !== null && maxAffordableQty > 0 && (
+            <button
+              onClick={() => setQuantity(maxAffordableQty.toFixed(6))}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              Max: {maxAffordableQty.toFixed(4)}
+            </button>
+          )}
+        </div>
         <input
           type="number"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           placeholder="0"
           step="0.000001"
+          min="0"
           className="w-full bg-[#0F1117] border border-[#2A2D3A] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
         />
       </div>
 
-      {/* Total estimate */}
-      {estimatedTotal && (
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>Estimated total</span>
-          <span className="text-white font-medium">${estimatedTotal} USDC</span>
-        </div>
-      )}
-
-      {/* Escrow info for buys */}
-      {side === 'BUY' && (
-        <div className="text-xs bg-blue-400/10 rounded px-3 py-2 text-blue-400">
-          {DEV_SKIP_ESCROW
-            ? 'Dev mode: escrow skipped — order placed directly.'
-            : 'USDC will be locked in escrow when you place this order.'}
+      {/* Total estimate + balance warning */}
+      {estimatedTotal !== null && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>Total cost</span>
+            <span className={`font-medium ${insufficientUsdc ? 'text-red-400' : 'text-white'}`}>
+              ${estimatedTotal.toFixed(2)} USDC
+            </span>
+          </div>
+          {insufficientUsdc && (
+            <p className="text-xs text-red-400">
+              Insufficient balance. Need ${estimatedTotal.toFixed(2)}, have ${usdcBalance!.toFixed(2)}.
+              {IS_TESTNET && ' Click "Get Test USDC" above.'}
+            </p>
+          )}
         </div>
       )}
 
       {/* Price band hint */}
       {referencePriceUsdc && orderType === 'LIMIT' && (
         <div className="text-xs text-gray-500">
-          Reference: {(Number(referencePriceUsdc) / 1_000_000).toFixed(4)} USDC — orders must be within ±20%
-          ({(Number(referencePriceUsdc) * 0.8 / 1_000_000).toFixed(4)}–{(Number(referencePriceUsdc) * 1.2 / 1_000_000).toFixed(4)})
+          Reference price: {(Number(referencePriceUsdc) / 1_000_000).toFixed(4)} USDC — orders within ±20%
         </div>
       )}
 
-      {/* Wallet connection guard */}
+      {/* Submit button */}
       {!activeAddress ? (
         <p className="text-xs text-yellow-500 text-center">Connect your Algorand wallet to trade</p>
       ) : (
         <button
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || !quantity || (orderType === 'LIMIT' && !price)}
+          disabled={
+            mutation.isPending ||
+            !quantity ||
+            (orderType === 'LIMIT' && !price) ||
+            insufficientUsdc
+          }
           className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-40 ${
             side === 'BUY'
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-red-600 hover:bg-red-700 text-white'
           }`}
         >
-          {mutation.isPending ? 'Placing order…' : `${side} ${assetId.slice(0, 4).toUpperCase()}`}
+          {mutation.isPending
+            ? 'Processing…'
+            : insufficientUsdc
+              ? 'Insufficient USDC'
+              : `${side} ${assetId.slice(0, 4).toUpperCase()}`}
         </button>
       )}
 
-      {mutation.isError && (
-        <p className="text-xs text-red-500 text-center">
-          {(mutation.error as Error).message}
-        </p>
+      {errorMessage && (
+        <p className="text-xs text-red-400 text-center leading-relaxed">{errorMessage}</p>
+      )}
+
+      {mutation.isSuccess && (
+        <p className="text-xs text-green-400 text-center">Order placed and live in orderbook!</p>
       )}
     </div>
   );

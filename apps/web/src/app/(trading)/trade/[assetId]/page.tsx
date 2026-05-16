@@ -12,7 +12,7 @@ import { useOrderBook } from '@/hooks/use-order-book';
 
 export default function TradePage({ params }: { params: { assetId: string } }) {
   const { assetId } = params;
-  const { activeAddress, activeWallet } = useWallet();
+  const { activeAddress, activeWallet, transactionSigner } = useWallet();
 
   const { data: asset } = useQuery({
     queryKey: ['asset', assetId],
@@ -47,7 +47,7 @@ export default function TradePage({ params }: { params: { assetId: string } }) {
       {activeAddress && activeWallet && (
         <SettlementSigner
           walletAddress={activeAddress}
-          walletSigner={activeWallet.transactionSigner}
+          walletSigner={transactionSigner}
         />
       )}
 

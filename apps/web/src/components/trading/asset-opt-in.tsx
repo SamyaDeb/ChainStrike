@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@txnlab/use-wallet-react';
 import algosdk from 'algosdk';
 
@@ -16,8 +16,18 @@ const ALGOD_TOKEN = process.env.NEXT_PUBLIC_ALGORAND_ALGOD_TOKEN ?? '';
 export function AssetOptIn({ asaId, walletAddress }: Props) {
   const { signTransactions, algodClient } = useWallet();
   const [isOptingIn, setIsOptingIn] = useState(false);
-  const [hasOptedIn, setHasOptedIn] = useState(false);
+  const [hasOptedIn, setHasOptedIn] = useState<boolean | null>(null); // null = loading
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!walletAddress || !asaId) return;
+    const client = algodClient ?? new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
+    client.accountAssetInformation(walletAddress, asaId).do()
+      .then((info: any) => {
+        setHasOptedIn(!!(info.assetHolding ?? info['asset-holding']));
+      })
+      .catch(() => setHasOptedIn(false));
+  }, [walletAddress, asaId, algodClient]);
 
   const handleOptIn = async () => {
     if (!signTransactions) {
@@ -33,16 +43,16 @@ export function AssetOptIn({ asaId, walletAddress }: Props) {
       const suggestedParams = await client.getTransactionParams().do();
 
       const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        from: walletAddress,
-        to: walletAddress,
+        sender: walletAddress,
+        receiver: walletAddress,
         assetIndex: asaId,
-        amount: 0,
+        amount: 0n,
         suggestedParams,
       });
 
-      const signed = await signTransactions([optInTxn.toByte()]);
-      const { txId } = await client.sendRawTransaction(signed).do();
-      await algosdk.waitForConfirmation(client, txId, 4);
+      const signed = (await signTransactions([algosdk.encodeUnsignedTransaction(optInTxn)])).filter((s): s is Uint8Array => s !== null);
+      const { txid } = await client.sendRawTransaction(signed).do();
+      await algosdk.waitForConfirmation(client, txid, 4);
 
       setHasOptedIn(true);
     } catch (err) {
@@ -51,6 +61,14 @@ export function AssetOptIn({ asaId, walletAddress }: Props) {
       setIsOptingIn(false);
     }
   };
+
+  if (hasOptedIn === null) {
+    return (
+      <div className="text-xs text-gray-400 bg-gray-400/10 rounded px-3 py-2 animate-pulse">
+        Checking opt-in status…
+      </div>
+    );
+  }
 
   if (hasOptedIn) {
     return (
