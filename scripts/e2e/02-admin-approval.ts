@@ -238,24 +238,14 @@ async function main() {
   const asaId = await deployAsa(adminToken, assetId);
   await verifyAssetIsPreMarket(assetId, asaId);
   await verifyOrderbookMarketCreated(assetId);
-
-  // Verify issuance escrow was released to vault on-chain
-  const freshAsset = await axios.get(`${GATEWAY}/assets/${assetId}`);
-  const vaultContractId = freshAsset.data.vaultContractId;
-  if (vaultContractId) {
-    await verifyEscrowReleasedToVault(assetId, vaultContractId);
-  } else {
-    console.log('  ⚠️  vaultContractId not set — skipping escrow release verification');
-  }
-
-  await activateMarket(adminToken, assetId, asaId);
+  // Note: escrow release + market activation happens in test 04 (activate-market)
+  // which also handles token distribution via the asset service's activateMarket endpoint
 
   saveState({ adminToken, asaId });
 
-  console.log(`\n✅ TEST 02 PASSED — ASA deployed and market activated: ${asaId}`);
+  console.log(`\n✅ TEST 02 PASSED — ASA deployed: asaId=${asaId}`);
   console.log(`   Algoexplorer: https://testnet.algoexplorer.io/asset/${asaId}`);
-  console.log(`   Issuance escrow released to vault on-chain ✓`);
-  console.log(`   Issuer tokens distributed on-chain ✓\n`);
+  console.log(`   Asset is PRE_MARKET — run test 03 to distribute tokens, test 04 to activate\n`);
 }
 
 main().catch((err) => {

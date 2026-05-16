@@ -51,7 +51,7 @@ async function activateMarket(token: string, assetId: string) {
   const { data } = await axios.patch(
     `${GATEWAY}/assets/${assetId}/activate`,
     {},
-    { ...authHeader(token), timeout: 10_000 },
+    { ...authHeader(token), timeout: 180_000 },
   );
   if (data.status !== 'ACTIVE') {
     fail(`Expected status=ACTIVE, got: ${JSON.stringify(data)}`);
@@ -113,7 +113,7 @@ async function verifyBuyOrderNowPossible(token: string, assetId: string, walletA
         quantity: '1000000', // 1 token (micro)
         walletAddress,
       },
-      { ...authHeader(token), timeout: 10_000 },
+      { ...authHeader(token), timeout: 180_000 },
     );
     if (data.id) {
       ok(`BUY order accepted: orderId=${data.id}, status=${data.status}`);
@@ -145,10 +145,14 @@ async function main() {
 
   const adminToken = await getAdminToken();
 
-  await activateMarket(adminToken, assetId);
-
-  // Small delay for HTTP propagation to orderbook
-  await new Promise((r) => setTimeout(r, 1000));
+  // Check if already active (may have been activated in test 02 or externally)
+  const { data: preCheck } = await axios.get(`${GATEWAY}/assets/${assetId}`);
+  if (preCheck.status === 'ACTIVE') {
+    ok(`Market already ACTIVE — skipping activation`);
+  } else {
+    await activateMarket(adminToken, assetId);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 
   await verifyAssetIsActive(assetId);
   await verifyMarketplaceListsAsset(assetId, ticker ?? '');

@@ -129,7 +129,8 @@ export default function TradePage({ params }: { params: { assetId: string } }) {
           <OrderForm
             assetId={assetId}
             asaId={asset?.asaId}
-            referencePriceUsdc={asset?.referencePriceUsdc}
+            referencePriceUsdc={asset?.pricePerToken ?? asset?.referencePriceUsdc}
+            bestAskUsdc={snapshot?.asks?.[0]?.price}
           />
         </div>
       </div>

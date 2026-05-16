@@ -133,6 +133,20 @@ export class EscrowContract extends Contract {
     this.escrowHolds(orderId).delete();
   }
 
+  // ─── Admin: Opt this contract into USDC (or any ASA) ─────────────────────────
+  // Must be called once after deployment before the contract can receive USDC.
+  // Requires the contract to be funded with at least 0.1 ALGO for MBR.
+
+  optIntoUsdc(): void {
+    assert(Txn.sender === this.admin.value, 'Only admin can opt into assets');
+    itxn.assetTransfer({
+      assetReceiver: Global.currentApplicationAddress,
+      xferAsset: this.usdcAsaId.value,
+      assetAmount: 0,
+      fee: 0,
+    }).submit();
+  }
+
   // ─── Admin: Update settlement contract address ────────────────────────────────
 
   updateSettlementContract(newAddress: Account): void {

@@ -190,20 +190,47 @@ async function main() {
   if (!assetId || !asaId) fail('assetId/asaId missing — run 01 and 02 first');
 
   const adminToken = await getAdminToken();
-
   const algod = new algosdk.Algodv2('', ALGOD_SERVER, 443);
   const adminAccount = algosdk.mnemonicToSecretKey(ADMIN_MNEMONIC);
   const issuerWalletAddress = adminAccount.addr.toString();
 
-  log(`Using admin wallet as issuer wallet: ${issuerWalletAddress.slice(0, 20)}…`);
+  // Check current asset status
+  const { data: currentAsset } = await axios.get(`${GATEWAY}/assets/${assetId}`);
+  const assetStatus = currentAsset.status;
+  log(`Asset status: ${assetStatus}`);
 
+  // Check if admin wallet actually holds tokens (or if they were moved to vault on ASA deploy)
+  const { assets: adminAssets } = await getAlgorandStatus(algod, issuerWalletAddress);
+  const adminAsaHolding = adminAssets.find((a: any) => Number(a.assetId ?? a['asset-id']) === asaId);
+  const adminAsaBalance = adminAsaHolding ? BigInt(adminAsaHolding.amount) : 0n;
+
+  if (assetStatus === 'ACTIVE' || adminAsaBalance === 0n) {
+    // Tokens are in vault OR market already activated — activateMarket handles distribution + seeding
+    const reason = assetStatus === 'ACTIVE' ? 'market already ACTIVE' : 'tokens are in vault (admin has 0)';
+    ok(`Skipping manual distribution: ${reason}`);
+    ok(`activateMarket (test 04) will distribute from vault → issuer and seed SELL orders`);
+    log(`Using issuer wallet: ${issuerWalletAddress.slice(0, 20)}…`);
+
+    if (assetStatus === 'ACTIVE') {
+      await verifyOrderbookDepth(assetId, 0);
+    }
+    await verifyWhitelistIssuer(assetId, asaId, issuerWalletAddress);
+
+    saveState({ adminToken, issuerWalletAddress, distributeTxid: 'vault-auto-distributes-on-activation', seedOrderId: 'N/A' });
+
+    console.log(`\n✅ TEST 03 PASSED (tokens held by vault — distribution deferred to activateMarket)`);
+    console.log(`   Issuer wallet:   ${issuerWalletAddress}\n`);
+    return;
+  }
+
+  // Admin wallet has tokens — do manual distribution and seeding
+  log(`Using admin wallet as issuer wallet: ${issuerWalletAddress.slice(0, 20)}…`);
   await checkAdminWalletFunded(algod, issuerWalletAddress, asaId);
 
   // Distribute 100,000 tokens (100_000 * 1e6 = 100_000_000_000 micro-tokens)
   const distributeAmount = '100000000000';
   const distributeTxid = await distributeTokensToIssuer(adminToken, assetId, issuerWalletAddress, distributeAmount);
 
-  // Wait for Algorand confirmation
   log('Waiting 4s for Algorand block confirmation…');
   await new Promise((r) => setTimeout(r, 4000));
 
@@ -213,7 +240,6 @@ async function main() {
   const seedQty = '50000000000';
   const seedOrderId = await seedSellOrders(adminToken, assetId, issuerWalletAddress, seedQty);
 
-  // Small delay for in-memory store to update
   await new Promise((r) => setTimeout(r, 500));
 
   await verifyOrderbookDepth(assetId, 1);

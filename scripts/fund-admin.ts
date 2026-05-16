@@ -1,10 +1,12 @@
-import algosdk from 'algosdk';
 import * as dotenv from 'dotenv';
-
 dotenv.config();
 
-const client = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', 443);
-const indexer = new algosdk.Indexer('', 'https://testnet-idx.algonode.cloud', 443);
+import algosdk from 'algosdk';
+
+const algodToken = process.env.ALGORAND_ALGOD_TOKEN ?? '';
+const algodServer = process.env.ALGORAND_ALGOD_SERVER ?? 'https://testnet-api.algonode.cloud';
+const algodPort = parseInt(process.env.ALGORAND_ALGOD_PORT ?? '443');
+const client = new algosdk.Algodv2(algodToken, algodServer, algodPort);
 
 const USDC_ASA_ID = 10458941;
 const ADMIN_ADDR = 'HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM';
@@ -34,47 +36,46 @@ async function fundAdmin() {
     // Check if Treasury has USDC
     if (!treasuryUsdc || Number(treasuryUsdc.amount) === 0) {
       console.log('❌ Treasury wallet has no USDC. Need to fund from external source.\n');
-      console.log('Testnet USDC sources:');
-      console.log('  1. Algorand testnet faucet: https://testnet.algoexplorer.io/dispenser');
-      console.log('  2. Request on Algorand Foundation Discord');
-      console.log('  3. Use an existing testnet account with USDC\n');
+      console.log('To fund testnet USDC, use Circle faucet:');
+      console.log('  https://faucet.circle.com/algorand\n');
+      console.log('Then re-run this script.\n');
       return;
     }
 
     console.log(`✅ Treasury has ${Number(treasuryUsdc.amount) / 1e6} USDC\n`);
 
+    const adminMnemonic = process.env['ALGORAND_ADMIN_MNEMONIC'];
+    if (!adminMnemonic) {
+      console.error('❌ ALGORAND_ADMIN_MNEMONIC not set in .env');
+      return;
+    }
+
     // If admin is not opted in, opt in first
     if (!adminUsdc) {
       console.log('⏳ Admin wallet not opted into USDC. Creating opt-in transaction...\n');
 
-      const mnemonic = process.env['ALGORAND_ADMIN_MNEMONIC'];
-      if (!mnemonic) {
-        console.error('❌ ALGORAND_ADMIN_MNEMONIC not set in .env');
-        return;
-      }
-
-      const account = algosdk.mnemonicToSecretKey(mnemonic);
+      const account = algosdk.mnemonicToSecretKey(adminMnemonic);
       const params = await client.getTransactionParams().do();
 
-      const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParams(
-        account.addr,
-        account.addr,
-        undefined,
-        0,
-        USDC_ASA_ID,
-        params,
-      );
+      const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: account.addr,
+        receiver: account.addr,
+        assetIndex: USDC_ASA_ID,
+        amount: 0n,
+        suggestedParams: params,
+        note: new TextEncoder().encode('ChainStrike E2E — USDC opt-in'),
+      });
 
       const signed = optInTxn.signTxn(account.sk);
-      const txId = await client.sendRawTransaction(signed).do();
-      console.log(`✅ Opt-in transaction sent: ${txId.txId}`);
+      const { txid } = await client.sendRawTransaction(signed).do();
+      console.log(`✅ Opt-in transaction sent: ${txid}`);
       console.log('⏳ Waiting for confirmation...\n');
-      await algosdk.waitForConfirmation(client, txId.txId, 4);
+      await algosdk.waitForConfirmation(client, txid, 4);
       console.log('✅ Admin account opted into USDC\n');
     }
 
     // Now fund admin with USDC from treasury
-    console.log(`💸 Funding admin with 50 USDC from treasury...\n`);
+    console.log(`💸 Funding admin with 20 USDC from treasury...\n`);
 
     const treasuryMnemonic = process.env['TREASURY_MNEMONIC'];
     if (!treasuryMnemonic) {
@@ -85,20 +86,20 @@ async function fundAdmin() {
     const treasuryAccount = algosdk.mnemonicToSecretKey(treasuryMnemonic);
     const params = await client.getTransactionParams().do();
 
-    const transferTxn = algosdk.makeAssetTransferTxnWithSuggestedParams(
-      treasuryAccount.addr,
-      ADMIN_ADDR,
-      undefined,
-      BigInt(50 * 1e6), // 50 USDC
-      USDC_ASA_ID,
-      params,
-    );
+    const transferTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: treasuryAccount.addr,
+      receiver: ADMIN_ADDR,
+      assetIndex: USDC_ASA_ID,
+      amount: BigInt(20 * 1e6), // 20 USDC
+      suggestedParams: params,
+      note: new TextEncoder().encode('ChainStrike E2E — admin funding'),
+    });
 
     const signed = transferTxn.signTxn(treasuryAccount.sk);
-    const txId = await client.sendRawTransaction(signed).do();
-    console.log(`✅ Transfer transaction sent: ${txId.txId}`);
+    const { txid } = await client.sendRawTransaction(signed).do();
+    console.log(`✅ Transfer transaction sent: ${txid}`);
     console.log('⏳ Waiting for confirmation...\n');
-    await algosdk.waitForConfirmation(client, txId.txId, 4);
+    await algosdk.waitForConfirmation(client, txid, 4);
 
     // Verify final balance
     const finalAdminInfo = await client.accountInformation(ADMIN_ADDR).do();
@@ -110,6 +111,9 @@ async function fundAdmin() {
 
   } catch (err) {
     console.error('❌ Error:', (err as Error).message);
+    console.error('\nNote: Treasury wallet needs USDC to fund admin.');
+    console.error('If Treasury is empty, fund it using Circle testnet faucet:');
+    console.error('  https://faucet.circle.com/algorand\n');
   }
 }
 

@@ -10,6 +10,7 @@ interface Props {
   assetId: string;
   asaId?: number;
   referencePriceUsdc?: string;
+  bestAskUsdc?: string;  // pre-fill from orderbook depth
 }
 
 type Side = 'BUY' | 'SELL';
@@ -46,7 +47,7 @@ function parseAlgorandError(err: unknown): string {
   return msg;
 }
 
-export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
+export function OrderForm({ assetId, asaId, referencePriceUsdc, bestAskUsdc }: Props) {
   const { activeAddress, signTransactions, algodClient } = useWallet();
   const queryClient = useQueryClient();
 
@@ -55,6 +56,13 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
   const [tif, setTif] = useState<TimeInForce>('GTC');
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
+
+  // Pre-fill price from best ask when switching to BUY / when component receives live ask
+  useEffect(() => {
+    if (side === 'BUY' && !price && bestAskUsdc) {
+      setPrice((Number(bestAskUsdc) / 1_000_000).toFixed(6).replace(/\.?0+$/, ''));
+    }
+  }, [side, bestAskUsdc]);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [dispensing, setDispensing] = useState(false);
   const [dispenseMsg, setDispenseMsg] = useState<string | null>(null);
@@ -75,6 +83,9 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
   useEffect(() => { fetchUsdcBalance(); }, [fetchUsdcBalance]);
 
   const priceNum = parseFloat(price) || (referencePriceUsdc ? Number(referencePriceUsdc) / 1_000_000 : 0);
+  const refNum = referencePriceUsdc ? Number(referencePriceUsdc) / 1_000_000 : null;
+  const priceBandViolation = orderType === 'LIMIT' && price && refNum !== null
+    && (priceNum < refNum * 0.80 || priceNum > refNum * 1.20);
   const estimatedTotal = price && quantity
     ? parseFloat(price) * parseFloat(quantity)
     : null;
@@ -372,12 +383,20 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
         </div>
       )}
 
-      {/* Price band hint */}
-      {referencePriceUsdc && orderType === 'LIMIT' && (
-        <div className="text-xs text-gray-500">
-          Reference price: {(Number(referencePriceUsdc) / 1_000_000).toFixed(4)} USDC — orders within ±20%
-        </div>
-      )}
+      {/* Price band hint — show valid range */}
+      {referencePriceUsdc && orderType === 'LIMIT' && (() => {
+        const ref = Number(referencePriceUsdc) / 1_000_000;
+        const lo = (ref * 0.80).toFixed(4);
+        const hi = (ref * 1.20).toFixed(4);
+        const enteredPrice = parseFloat(price);
+        const outOfBand = price && (enteredPrice < ref * 0.80 || enteredPrice > ref * 1.20);
+        return (
+          <div className={`text-xs ${outOfBand ? 'text-red-400' : 'text-gray-500'}`}>
+            Valid price range: ${lo} – ${hi} USDC (±20% of ${ref.toFixed(4)})
+            {outOfBand && <span className="block mt-0.5 font-medium">⚠ Price out of range — order will be rejected</span>}
+          </div>
+        );
+      })()}
 
       {/* Submit button */}
       {!activeAddress ? (
@@ -389,7 +408,8 @@ export function OrderForm({ assetId, asaId, referencePriceUsdc }: Props) {
             mutation.isPending ||
             !quantity ||
             (orderType === 'LIMIT' && !price) ||
-            insufficientUsdc
+            insufficientUsdc ||
+            !!priceBandViolation
           }
           className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-40 ${
             side === 'BUY'

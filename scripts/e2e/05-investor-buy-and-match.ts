@@ -7,12 +7,23 @@
  * Requires: 04-activate-market to have run first
  */
 
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '../../.env' });
+dotenv.config(); // also try local .env
+
 import axios from 'axios';
+import algosdk from 'algosdk';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 
 const GATEWAY = 'http://localhost:8080/api/v1';
 const STATE_FILE = path.resolve('scripts/e2e/.state.json');
+const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
+const USDC_ASA_ID = 10458941;
+const ESCROW_CONTRACT_APP_ID = parseInt(process.env['ESCROW_CONTRACT_APP_ID'] ?? '762550531', 10);
+
+// Dev admin wallet (acts as investor in testnet E2E)
+const ADMIN_MNEMONIC = 'crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss';
 
 function log(msg: string) { console.log(`  ${msg}`); }
 function ok(msg: string) { console.log(`  ✅ ${msg}`); }
@@ -54,6 +65,42 @@ async function ensureInvestorWhitelisted(assetId: string, asaId: number, walletA
   }
 }
 
+async function lockUsdcInEscrow(
+  walletAddress: string,
+  priceUsdc: string,
+  quantity: string,
+): Promise<string> {
+  const algod = new algosdk.Algodv2('', ALGOD_SERVER, 443);
+  const account = algosdk.mnemonicToSecretKey(ADMIN_MNEMONIC);
+
+  const escrowAddress = algosdk.getApplicationAddress(ESCROW_CONTRACT_APP_ID).toString();
+  const priceN = BigInt(priceUsdc);
+  const quantityN = BigInt(quantity);
+  // micro-USDC = (micro-USDC/token * micro-tokens) / 1_000_000
+  const usdcAmount = (priceN * quantityN) / 1_000_000n;
+
+  log(`Locking ${Number(usdcAmount) / 1e6} USDC in escrow contract (appId=${ESCROW_CONTRACT_APP_ID})…`);
+  log(`  Escrow address: ${escrowAddress}`);
+
+  const suggestedParams = await algod.getTransactionParams().do();
+  const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: walletAddress,
+    receiver: escrowAddress,
+    amount: usdcAmount,
+    assetIndex: USDC_ASA_ID,
+    suggestedParams,
+  });
+
+  const signed = txn.signTxn(account.sk);
+  const { txid } = await algod.sendRawTransaction(signed).do();
+
+  // Wait for confirmation
+  log(`  USDC lock TX submitted: ${txid} — waiting for confirmation…`);
+  await algosdk.waitForConfirmation(algod, txid, 10);
+  ok(`USDC locked in escrow: txid=${txid}`);
+  return txid;
+}
+
 async function getOrderbookDepthBeforeBuy(assetId: string): Promise<{ bestAsk: string; askQty: string } | null> {
   log('Capturing orderbook depth before BUY order…');
   const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/depth?levels=20`);
@@ -72,6 +119,7 @@ async function placeBuyOrderAtBestAsk(
   walletAddress: string,
   priceUsdc: string,
   quantity: string,
+  escrowTxId: string,
 ): Promise<string> {
   log(`Placing BUY LIMIT order: ${Number(quantity) / 1e6} tokens @ ${Number(priceUsdc) / 1e6} USDC…`);
 
@@ -85,8 +133,9 @@ async function placeBuyOrderAtBestAsk(
       price: priceUsdc,
       quantity,
       walletAddress,
+      escrowTxId,
     },
-    { ...authHeader(investorToken), timeout: 15_000 },
+    { ...authHeader(investorToken), timeout: 30_000 },
   );
 
   if (!data.id) fail(`BUY order creation failed: ${JSON.stringify(data)}`);
@@ -177,10 +226,8 @@ async function main() {
   const { assetId, asaId, issuerWalletAddress } = state;
   if (!assetId || !asaId) fail('assetId/asaId missing — run previous tests first');
 
-  let investorToken = state.investorToken;
-  if (!investorToken) {
-    investorToken = await getToken('investor@testnet.io', 'Investor@Test2024!');
-  }
+  // Always fetch a fresh token — JWTs expire in 15m so cached tokens are often stale
+  const investorToken = await getToken('investor@testnet.io', 'Investor@Test2024!');
   const investorPayload = JSON.parse(Buffer.from(investorToken.split('.')[1], 'base64').toString());
   const investorUserId = investorPayload.sub;
 
@@ -203,11 +250,15 @@ async function main() {
     warn(`No asks in depth — using asset pricePerToken: ${buyPrice}`);
   }
 
-  // Buy 5 tokens (5 * 1e6 micro-tokens)
-  const buyQuantity = '5000000';
+  // Buy 1 token (1 * 1e6 micro-tokens) to minimise USDC needed (1 token × price)
+  const buyQuantity = '1000000';
   const resolvedBuyPrice = buyPrice ?? '25000000'; // fallback: 25 USDC
+
+  // Lock USDC in escrow contract before placing BUY order (Phase 3 enforcement)
+  const escrowTxId = await lockUsdcInEscrow(investorWalletAddress, resolvedBuyPrice, buyQuantity);
+
   const buyOrderId = await placeBuyOrderAtBestAsk(
-    investorToken, assetId, investorWalletAddress, resolvedBuyPrice, buyQuantity,
+    investorToken, assetId, investorWalletAddress, resolvedBuyPrice, buyQuantity, escrowTxId,
   );
 
   // Small pause for async matching to run
