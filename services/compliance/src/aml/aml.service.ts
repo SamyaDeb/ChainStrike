@@ -2,8 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventProducerService } from '../events/event-producer.service';
-import { Topics } from '@chainstrike/events';
 
 @Injectable()
 export class AmlService {
@@ -14,7 +12,6 @@ export class AmlService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly events: EventProducerService,
   ) {
     this.chainalysisBaseUrl = this.config.get<string>('CHAINALYSIS_API_URL', 'https://api.chainalysis.com');
     this.apiKey = this.config.getOrThrow<string>('CHAINALYSIS_API_KEY');
@@ -46,13 +43,13 @@ export class AmlService {
           score: riskScore,
           riskBand,
           provider: 'chainalysis',
-          exposures: sanctionsMatch ? ['sanctions'] : [],
+          exposures: sanctionsMatch ? 'sanctions' : '',
           lastCheckedAt: new Date(),
         },
         update: {
           score: riskScore,
           riskBand,
-          exposures: sanctionsMatch ? ['sanctions'] : [],
+          exposures: sanctionsMatch ? 'sanctions' : '',
           lastCheckedAt: new Date(),
         },
       });
@@ -112,13 +109,7 @@ export class AmlService {
       },
     });
 
-    await this.events.emit(Topics.ACCOUNT_FROZEN, {
-      userId,
-      walletAddress,
-      reason: 'SANCTIONS_MATCH',
-    });
-
-    this.logger.warn(`SANCTIONS ALERT raised for wallet ${walletAddress}`);
+    this.logger.warn(`SANCTIONS ALERT raised for wallet ${walletAddress} userId=${userId} — account freeze skipped (Kafka disabled)`);
   }
 
   private classifyRisk(score: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'SEVERE' {

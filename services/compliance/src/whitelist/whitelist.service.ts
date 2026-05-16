@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import algosdk from 'algosdk';
 import { WhitelistRepository } from './whitelist.repository';
-import { EventProducerService } from '../events/event-producer.service';
 import { AlgorandService } from '../algorand/algorand.service';
-import { Topics } from '@chainstrike/events';
-import { KycVerifiedPayload, WhitelistUpdatedPayload } from '@chainstrike/types';
+import { KycVerifiedPayload } from '@chainstrike/types';
 
 @Injectable()
 export class WhitelistService {
@@ -12,7 +10,6 @@ export class WhitelistService {
 
   constructor(
     private readonly whitelistRepo: WhitelistRepository,
-    private readonly events: EventProducerService,
     private readonly algorand: AlgorandService,
   ) {}
 
@@ -53,14 +50,7 @@ export class WhitelistService {
 
     this.logger.log(`Whitelisted ${walletAddress} for asset ${asaId} (tier=${kycTier})`);
 
-    // Emit event for audit trail
-    await this.events.emit<WhitelistUpdatedPayload>(Topics.WHITELIST_UPDATED, {
-      action: 'added',
-      walletAddress,
-      assetId,
-      asaId,
-      userId,
-    });
+    this.logger.log(`Whitelist event: added ${walletAddress} for asset ${asaId}`);
   }
 
   // ─── Remove from whitelist ────────────────────────────────────────────────────
@@ -84,14 +74,7 @@ export class WhitelistService {
 
     this.logger.log(`Removed ${walletAddress} from whitelist for asset ${asaId}: ${reason}`);
 
-    await this.events.emit<WhitelistUpdatedPayload>(Topics.WHITELIST_UPDATED, {
-      action: 'removed',
-      walletAddress,
-      assetId,
-      asaId,
-      userId,
-      reason,
-    });
+    this.logger.log(`Whitelist event: removed ${walletAddress} for asset ${asaId} reason=${reason}`);
   }
 
   // ─── Handle KYC Verified event ────────────────────────────────────────────────

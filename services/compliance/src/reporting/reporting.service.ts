@@ -49,6 +49,14 @@ export class ReportingService {
     return { openAlerts, pendingSars: pendingDrafts, recentEvents };
   }
 
+  async getAmlAlerts() {
+    return this.prisma.amlAlert.findMany({
+      where: { status: 'OPEN' },
+      orderBy: { detectedAt: 'desc' },
+      take: 50,
+    });
+  }
+
   async exportAuditLog(startDate: Date, endDate: Date) {
     return this.prisma.complianceEvent.findMany({
       where: { createdAt: { gte: startDate, lte: endDate } },

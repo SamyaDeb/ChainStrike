@@ -1,13 +1,11 @@
 generator client {
-  previewFeatures = ["multiSchema"]
   provider = "prisma-client-js"
   output   = "../../../node_modules/.prisma/compliance-client"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("COMPLIANCE_DATABASE_URL")
-  schemas  = ["compliance", "public"]
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // ─── Whitelist Entry ──────────────────────────────────────────────────────────
@@ -15,8 +13,8 @@ datasource db {
 model WhitelistEntry {
   id             String    @id @default(uuid())
   walletAddress  String
-  assetId        String    // Platform asset UUID
-  asaId          Int       // Algorand ASA ID
+  assetId        String
+  asaId          Int
   userId         String
   kycTier        Int
   isActive       Boolean   @default(true)
@@ -24,13 +22,12 @@ model WhitelistEntry {
   expiresAt      DateTime?
   removedAt      DateTime?
   removedReason  String?
-  onChainTxId    String?   // Algorand TX that updated on-chain whitelist
+  onChainTxId    String?
 
   @@unique([walletAddress, assetId])
   @@index([walletAddress])
   @@index([assetId])
   @@index([userId])
-  @@schema("compliance")
 }
 
 // ─── Transfer Rule ────────────────────────────────────────────────────────────
@@ -38,31 +35,30 @@ model WhitelistEntry {
 model TransferRule {
   id        String   @id @default(uuid())
   assetId   String
-  ruleType  String   // TransferRuleType enum value
-  value     Json     // Rule-specific config
+  ruleType  String
+  value     String
   isActive  Boolean  @default(true)
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([assetId])
-  @@schema("compliance")
 }
 
 // ─── AML Alert ────────────────────────────────────────────────────────────────
 
 model AmlAlert {
-  id            String          @id @default(uuid())
+  id            String    @id @default(uuid())
   userId        String?
   walletAddress String?
   tradeId       String?
   orderId       String?
   alertType     String
-  status        AmlAlertStatus  @default(OPEN)
-  severity      AlertSeverity   @default(MEDIUM)
+  status        String    @default("OPEN")
+  severity      String    @default("MEDIUM")
   description   String
-  rawData       Json?           // Alert source data
-  detectedAt    DateTime        @default(now())
+  rawData       String?
+  detectedAt    DateTime  @default(now())
   reviewedBy    String?
   reviewedAt    DateTime?
   resolution    String?
@@ -72,26 +68,6 @@ model AmlAlert {
   @@index([userId])
   @@index([status])
   @@index([detectedAt])
-  @@schema("compliance")
-}
-
-enum AmlAlertStatus {
-  OPEN
-  UNDER_REVIEW
-  CLEARED
-  ESCALATED
-  SAR_FILED
-
-  @@schema("compliance")
-}
-
-enum AlertSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-
-  @@schema("compliance")
 }
 
 // ─── SAR Report ──────────────────────────────────────────────────────────────
@@ -99,7 +75,7 @@ enum AlertSeverity {
 model SarReport {
   id                  String    @id @default(uuid())
   alertId             String    @unique
-  status              SarStatus @default(DRAFT)
+  status              String    @default("DRAFT")
   narrativeText       String?
   fiuReference        String?
   filingJurisdiction  String
@@ -112,17 +88,6 @@ model SarReport {
   updatedAt           DateTime  @updatedAt
 
   alert AmlAlert @relation(fields: [alertId], references: [id])
-
-  @@schema("compliance")
-}
-
-enum SarStatus {
-  DRAFT
-  PENDING_APPROVAL
-  FILED
-  REJECTED
-
-  @@schema("compliance")
 }
 
 // ─── Compliance Event (Append-Only) ──────────────────────────────────────────
@@ -135,14 +100,13 @@ model ComplianceEvent {
   actorId      String
   actorType    String
   description  String
-  metadata     Json     @default("{}")
+  metadata     String   @default("{}")
   onChainTxId  String?
   createdAt    DateTime @default(now())
 
   @@index([subjectType, subjectId])
   @@index([eventType])
   @@index([createdAt])
-  @@schema("compliance")
 }
 
 // ─── Wallet Risk Score ────────────────────────────────────────────────────────
@@ -150,29 +114,26 @@ model ComplianceEvent {
 model WalletRiskScore {
   id            String   @id @default(uuid())
   walletAddress String   @unique
-  riskBand      String   // AmlRiskBand
+  riskBand      String
   score         Int
-  exposures     Json     @default("[]")
+  exposures     String   @default("[]")
   provider      String
   lastCheckedAt DateTime @default(now())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  @@schema("compliance")
 }
 
 // ─── Sanctions Screening Result ───────────────────────────────────────────────
 
 model SanctionsScreeningResult {
-  id            String   @id @default(uuid())
-  userId        String
-  isMatch       Boolean
-  matchedLists  String[] @default([])
-  matchedNames  String[] @default([])
-  screenerAt    DateTime @default(now())
-  requiresReview Boolean @default(false)
+  id              String   @id @default(uuid())
+  userId          String
+  isMatch         Boolean
+  matchedLists    String   @default("")
+  matchedNames    String   @default("")
+  screenerAt      DateTime @default(now())
+  requiresReview  Boolean  @default(false)
 
   @@index([userId])
   @@index([screenerAt])
-  @@schema("compliance")
 }

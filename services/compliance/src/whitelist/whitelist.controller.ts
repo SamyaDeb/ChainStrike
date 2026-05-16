@@ -5,6 +5,7 @@ import { IsString, IsNumber, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 import { WhitelistService } from './whitelist.service';
 import { RulesService } from '../rules/rules.service';
+import { ReportingService } from '../reporting/reporting.service';
 
 class PreTradeCheckDto {
   @IsString() walletAddress: string;
@@ -28,6 +29,7 @@ export class ComplianceController {
   constructor(
     private readonly whitelistService: WhitelistService,
     private readonly rulesService: RulesService,
+    private readonly reportingService: ReportingService,
   ) {}
 
   // Called internally by Orderbook Service — no JWT required (internal network only)
@@ -50,6 +52,22 @@ export class ComplianceController {
   @ApiOperation({ summary: 'Get whitelist entries for a wallet' })
   async getWhitelist(@Param('walletAddress') walletAddress: string) {
     return this.whitelistService.getWhitelistForWallet(walletAddress);
+  }
+
+  @Get('aml/alerts')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get open AML alerts for compliance dashboard' })
+  async getAmlAlerts() {
+    return this.reportingService.getAmlAlerts();
+  }
+
+  @Get('dashboard')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get compliance dashboard stats' })
+  async getDashboard() {
+    return this.reportingService.getComplianceDashboard();
   }
 
   // ─── Dev-only: self-approve wallet for testnet testing ───────────────────────

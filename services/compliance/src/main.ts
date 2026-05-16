@@ -1,10 +1,7 @@
 import { NestFactory } from '@nestjs/core';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
-import { kafkaConfig } from '@chainstrike/config';
-import { ConsumerGroups } from '@chainstrike/events';
 import { AppModule } from './app.module';
 import { createServiceLogger } from '@chainstrike/logger';
 
@@ -13,18 +10,8 @@ import { createServiceLogger } from '@chainstrike/logger';
 
 async function bootstrap() {
   const logger = createServiceLogger('compliance-service');
-  const kCfg = kafkaConfig('compliance');
 
-  // Hybrid: HTTP for pre-trade endpoint + Kafka consumer for KYC events
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.KAFKA,
-    options: {
-      client: { brokers: kCfg.brokers, clientId: kCfg.clientId },
-      consumer: { groupId: ConsumerGroups.COMPLIANCE_KYC, allowAutoTopicCreation: true },
-    },
-  });
 
   app.use(helmet());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -36,7 +23,6 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
-  await app.startAllMicroservices();
   const port = process.env.COMPLIANCE_SERVICE_PORT ?? 3004;
   await app.listen(port);
   logger.info(`Compliance service listening on port ${port}`);

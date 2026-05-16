@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformConstants } from '@chainstrike/config';
+import { queryWhitelistOnChain } from '@chainstrike/algorand';
+import algosdk from 'algosdk';
 
 interface PreTradeCheckInput {
   buyerWallet: string;
@@ -14,31 +17,83 @@ interface PreTradeCheckInput {
 @Injectable()
 export class RulesService {
   private readonly logger = new Logger(RulesService.name);
+  private readonly algodClient: algosdk.Algodv2;
+  private readonly whitelistRegistryAppId: number;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {
+    this.algodClient = new algosdk.Algodv2(
+      this.config.get<string>('ALGORAND_ALGOD_TOKEN', ''),
+      this.config.get<string>('ALGORAND_ALGOD_SERVER', 'https://testnet-api.algonode.cloud'),
+      this.config.get<string>('ALGORAND_ALGOD_PORT', '443'),
+    );
+    this.whitelistRegistryAppId = parseInt(
+      this.config.get<string>('WHITELIST_REGISTRY_APP_ID', '762425821'), 10,
+    );
+  }
 
   async checkPreTrade(input: PreTradeCheckInput): Promise<{ approved: boolean; failureCode?: string }> {
-    // 1. Whitelist check — order placer must be whitelisted for this asset
-    const buyerWhitelisted = await this.prisma.whitelistEntry.findFirst({
-      where: { walletAddress: input.buyerWallet, asaId: input.assetId, isActive: true },
-    });
-    if (!buyerWhitelisted) {
-      return { approved: false, failureCode: 'BUYER_NOT_WHITELISTED' };
+    // Dev bypass — skip all compliance checks when DEV_SKIP_COMPLIANCE=true
+    if (process.env['DEV_SKIP_COMPLIANCE'] === 'true') {
+      this.logger.warn(`[DEV] Skipping compliance checks for ${input.buyerWallet}`);
+      return { approved: true };
     }
-    if (buyerWhitelisted.expiresAt && buyerWhitelisted.expiresAt < new Date()) {
-      return { approved: false, failureCode: 'BUYER_WHITELIST_EXPIRED' };
+
+    // 1. On-chain whitelist check via WhitelistRegistry contract box storage
+    let onChainTier = input.buyerKycTier;
+    try {
+      const result = await queryWhitelistOnChain(
+        this.algodClient,
+        this.whitelistRegistryAppId,
+        input.buyerWallet,
+        input.assetId,
+      );
+
+      if (!result.isWhitelisted) {
+        // Fall back to DB if on-chain says not whitelisted (may not be added yet)
+        const dbEntry = await this.prisma.whitelistEntry.findFirst({
+          where: { walletAddress: input.buyerWallet, asaId: input.assetId, isActive: true },
+        });
+        if (!dbEntry) {
+          return { approved: false, failureCode: 'BUYER_NOT_WHITELISTED' };
+        }
+        if (dbEntry.expiresAt && dbEntry.expiresAt < new Date()) {
+          return { approved: false, failureCode: 'BUYER_WHITELIST_EXPIRED' };
+        }
+        onChainTier = dbEntry.kycTier;
+      } else {
+        if (result.expiresAt && result.expiresAt < new Date()) {
+          return { approved: false, failureCode: 'BUYER_WHITELIST_EXPIRED' };
+        }
+        onChainTier = result.tier || input.buyerKycTier;
+      }
+    } catch (err) {
+      // On algod failure, fall back to DB
+      this.logger.warn(`On-chain whitelist query failed, falling back to DB: ${(err as Error).message}`);
+      const dbEntry = await this.prisma.whitelistEntry.findFirst({
+        where: { walletAddress: input.buyerWallet, asaId: input.assetId, isActive: true },
+      });
+      if (!dbEntry) {
+        return { approved: false, failureCode: 'BUYER_NOT_WHITELISTED' };
+      }
+      if (dbEntry.expiresAt && dbEntry.expiresAt < new Date()) {
+        return { approved: false, failureCode: 'BUYER_WHITELIST_EXPIRED' };
+      }
+      onChainTier = dbEntry.kycTier;
     }
 
     // 2. KYC tier volume limits
     const tradeValueUsdc = (input.quantity * input.price) / 1_000_000n;
-    const annualLimitExceeded = this.checkAnnualLimit(input.buyerKycTier, input.buyerAnnualVolume + tradeValueUsdc);
+    const annualLimitExceeded = this.checkAnnualLimit(onChainTier, input.buyerAnnualVolume + tradeValueUsdc);
     if (annualLimitExceeded) {
       return { approved: false, failureCode: 'ANNUAL_LIMIT_EXCEEDED' };
     }
 
-    // 3. Asset-level transfer rules
+    // 3. Asset-level transfer rules from DB
     const rules = await this.prisma.transferRule.findMany({
-      where: { assetId: buyerWhitelisted.assetId, isActive: true },
+      where: { assetId: input.assetId.toString(), isActive: true },
     });
 
     for (const rule of rules) {
@@ -56,7 +111,12 @@ export class RulesService {
   }
 
   private evaluateRule(rule: { ruleType: string; value: unknown }, input: PreTradeCheckInput): string | null {
-    const params = rule.value as Record<string, unknown>;
+    let params: Record<string, unknown>;
+    try {
+      params = typeof rule.value === 'string' ? JSON.parse(rule.value) : (rule.value as Record<string, unknown>);
+    } catch {
+      return null;
+    }
     switch (rule.ruleType) {
       case 'MIN_INVESTMENT':
         if (input.quantity * input.price < BigInt(params['minUsdc'] as string)) {
@@ -64,10 +124,8 @@ export class RulesService {
         }
         break;
       case 'MAX_SINGLE_INVESTOR':
-        // Would require checking current holdings — simplified here
         break;
       case 'LOCKUP_PERIOD':
-        // Enforced on-chain by TransferRestriction contract
         break;
     }
     return null;
@@ -75,7 +133,7 @@ export class RulesService {
 
   async createRule(assetId: string, ruleType: string, value: Record<string, unknown>, createdBy: string) {
     return this.prisma.transferRule.create({
-      data: { assetId, ruleType, value: value as any, isActive: true, createdBy },
+      data: { assetId, ruleType, value: JSON.stringify(value), isActive: true, createdBy },
     });
   }
 }
