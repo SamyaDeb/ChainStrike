@@ -2,12 +2,22 @@ import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/c
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
+import algosdk from 'algosdk';
+import nacl from 'tweetnacl';
 import { jwtConfig } from '@chainstrike/config';
 import { AuthTokens, JwtPayload } from '@chainstrike/types';
 import { UserService } from '../user/user.service';
 
+interface ChallengeEntry {
+  nonce: string;
+  expiresAt: number;
+}
+
 @Injectable()
 export class AuthService {
+  // In-memory nonce store — keyed by wallet address, TTL 5 minutes
+  private readonly challengeStore = new Map<string, ChallengeEntry>();
+
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
@@ -28,7 +38,7 @@ export class AuthService {
     const passwordValid = await argon2.verify(user.passwordHash, password);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
-    if (!user.emailVerified) {
+    if (!user.emailVerified && process.env['NODE_ENV'] === 'production') {
       throw new ForbiddenException('Email not verified. Check your inbox.');
     }
 
@@ -50,6 +60,59 @@ export class AuthService {
 
   async logout(refreshToken: string): Promise<void> {
     await this.userService.revokeSession(refreshToken);
+  }
+
+  walletChallenge(address: string): { nonce: string; expiresAt: number } {
+    const nonce = `chainstrike-login:${randomBytes(16).toString('hex')}:${Date.now()}`;
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    this.challengeStore.set(address, { nonce, expiresAt });
+    return { nonce, expiresAt };
+  }
+
+  async walletLogin(address: string, nonce: string, signature: string): Promise<AuthTokens> {
+    const entry = this.challengeStore.get(address);
+    if (!entry || entry.nonce !== nonce || Date.now() > entry.expiresAt) {
+      throw new UnauthorizedException('Invalid or expired wallet challenge');
+    }
+    this.challengeStore.delete(address);
+
+    const valid = this.verifySignedTransaction(address, nonce, signature);
+    if (!valid) throw new UnauthorizedException('Wallet signature verification failed');
+
+    let user = await this.userService.findByWalletAddress(address);
+
+    // Auto-register: first-time wallet login creates an investor account linked to this address
+    if (!user) {
+      user = await this.userService.createWalletOnlyAccount(address) as any;
+    }
+
+    if ((user as any).status === 'SUSPENDED') throw new ForbiddenException('Account suspended');
+
+    return this.issueTokens(user as any);
+  }
+
+  private verifySignedTransaction(address: string, nonce: string, signatureB64: string): boolean {
+    try {
+      const sig = Buffer.from(signatureB64, 'base64');
+      const pubKey = algosdk.decodeAddress(address).publicKey;
+
+      // Pera signData prepends "MX" before hashing — primary verification path
+      if (sig.length === 64) {
+        const msgMX = Buffer.concat([Buffer.from('MX'), Buffer.from(nonce)]);
+        if (nacl.sign.detached.verify(msgMX, sig, pubKey)) return true;
+      }
+
+      // Fallback: full signed Algorand transaction (other wallet providers)
+      const decoded = algosdk.decodeSignedTransaction(sig);
+      if (decoded.txn.sender.toString() !== address) return false;
+      const note = decoded.txn.note ? new TextDecoder().decode(decoded.txn.note) : '';
+      if (note !== nonce) return false;
+      const txnBytes = algosdk.encodeUnsignedTransaction(decoded.txn);
+      const msgTX = new Uint8Array([...Buffer.from('TX'), ...txnBytes]);
+      return nacl.sign.detached.verify(msgTX, decoded.sig!, pubKey);
+    } catch {
+      return false;
+    }
   }
 
   private async issueTokens(user: {

@@ -1,10 +1,11 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { WalletChallengeDto, WalletLoginDto } from './dto/wallet-auth.dto';
 import { UserService } from '../user/user.service';
 
 @ApiTags('auth')
@@ -43,5 +44,22 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke refresh token (logout)' })
   async logout(@Body() dto: RefreshTokenDto) {
     await this.authService.logout(dto.refreshToken);
+  }
+
+  @Get('wallet-challenge')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Request a one-time nonce to sign with your Algorand wallet' })
+  walletChallenge(@Query('address') address: string) {
+    const dto = new WalletChallengeDto();
+    dto.address = address;
+    return this.authService.walletChallenge(dto.address);
+  }
+
+  @Post('wallet-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Login using a signed Algorand wallet challenge' })
+  async walletLogin(@Body() dto: WalletLoginDto) {
+    return this.authService.walletLogin(dto.address, dto.nonce, dto.signature);
   }
 }

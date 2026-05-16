@@ -1,31 +1,46 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
-import { EventEnvelope, TopicName } from '@chainstrike/events';
-import { randomUUID } from 'crypto';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
+import { Topics } from '@chainstrike/events';
+import type { TopicName } from '@chainstrike/events';
 
 @Injectable()
 export class EventProducerService {
   private readonly logger = new Logger(EventProducerService.name);
+  private readonly complianceServiceUrl: string;
 
-  constructor(@Inject('KAFKA_PRODUCER') private readonly kafka: ClientKafka) {}
+  constructor(private readonly config: ConfigService) {
+    this.complianceServiceUrl = this.config.get<string>(
+      'COMPLIANCE_SERVICE_URL',
+      'http://localhost:3004',
+    );
+  }
 
   async emit<T>(topic: TopicName, payload: T): Promise<void> {
-    const envelope: EventEnvelope<T> = {
-      eventId: randomUUID(),
-      eventType: topic,
-      source: 'identity-service',
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      payload,
-    };
+    this.logger.debug(`Emitting event ${topic} via HTTP`);
 
     try {
-      await this.kafka.emit(topic, { value: JSON.stringify(envelope) }).toPromise();
-      this.logger.debug(`Emitted event: ${topic} (${envelope.eventId})`);
-    } catch (error) {
-      this.logger.error(`Failed to emit event ${topic}: ${error}`);
-      // In production: persist to an outbox table for retry
-      throw error;
+      switch (topic) {
+        case Topics.KYC_VERIFIED:
+          await axios.post(
+            `${this.complianceServiceUrl}/internal/whitelist/add`,
+            payload,
+            { timeout: 3000 },
+          );
+          break;
+        case Topics.KYC_EXPIRED:
+          await axios.post(
+            `${this.complianceServiceUrl}/internal/whitelist/remove`,
+            payload,
+            { timeout: 3000 },
+          );
+          break;
+        default:
+          this.logger.debug(`No HTTP handler for topic ${topic}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Event HTTP delivery failed for ${topic}: ${(err as Error).message}`);
+      // Don't throw — primary action already completed
     }
   }
 }

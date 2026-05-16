@@ -1,5 +1,5 @@
-import { IsEmail, IsString, MinLength, IsIn } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, MinLength, IsIn, IsOptional, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
   @ApiProperty({ example: 'investor@example.com' })
@@ -14,4 +14,10 @@ export class RegisterDto {
   @ApiProperty({ enum: ['investor', 'issuer'] })
   @IsIn(['investor', 'issuer'])
   role: 'investor' | 'issuer';
+
+  @ApiPropertyOptional({ description: 'Algorand wallet address to associate with the account' })
+  @IsString()
+  @IsOptional()
+  @Matches(/^[A-Z2-7]{58}$/, { message: 'Invalid Algorand address format' })
+  walletAddress?: string;
 }

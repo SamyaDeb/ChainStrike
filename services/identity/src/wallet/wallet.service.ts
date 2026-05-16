@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import algosdk from 'algosdk';
+import nacl from 'tweetnacl';
 import { WalletRepository } from './wallet.repository';
 import { EventProducerService } from '../events/event-producer.service';
 import { Topics } from '@chainstrike/events';
@@ -73,13 +74,25 @@ export class WalletService {
 
   private verifyAlgorandSignature(
     address: string,
-    message: string,
+    challenge: string,
     signatureB64: string,
   ): boolean {
     try {
-      const encodedMessage = new TextEncoder().encode(message);
-      const signature = Buffer.from(signatureB64, 'base64');
-      return algosdk.verifyBytes(encodedMessage, signature, address);
+      const signedBytes = Buffer.from(signatureB64, 'base64');
+      const decoded = algosdk.decodeSignedTransaction(signedBytes);
+
+      // Verify sender matches claimed address
+      if (decoded.txn.sender.toString() !== address) return false;
+
+      // Verify note contains the challenge
+      const note = decoded.txn.note ? new TextDecoder().decode(decoded.txn.note) : '';
+      if (note !== challenge) return false;
+
+      // Verify Ed25519 signature: Algorand signs "TX" || msgpack(txn)
+      const txnBytes = algosdk.encodeUnsignedTransaction(decoded.txn);
+      const msgToVerify = new Uint8Array([...Buffer.from('TX'), ...txnBytes]);
+      const pubKey = algosdk.decodeAddress(address).publicKey;
+      return nacl.sign.detached.verify(msgToVerify, decoded.sig!, pubKey);
     } catch {
       return false;
     }

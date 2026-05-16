@@ -105,4 +105,31 @@ export class UserRepository {
       select: { id: true, role: true },
     });
   }
+
+  async addWalletAddress(userId: string, address: string, network = 'algorand') {
+    return this.prisma.walletAddress.upsert({
+      where: { address },
+      create: { userId, address, network, isPrimary: true },
+      update: { userId },
+    });
+  }
+
+  async findByWalletAddress(address: string) {
+    const wallet = await this.prisma.walletAddress.findFirst({
+      where: { address, deletedAt: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            emailVerified: true,
+            kycProfile: { select: { tier: true } },
+          },
+        },
+      },
+    });
+    return wallet?.user ?? null;
+  }
 }

@@ -23,12 +23,18 @@ export class UserService {
     const emailToken = randomBytes(32).toString('hex');
     const role = dto.role.toUpperCase() as 'INVESTOR' | 'ISSUER';
 
-    return this.userRepo.create({
+    const user = await this.userRepo.create({
       email: dto.email.toLowerCase().trim(),
       passwordHash,
       role,
       emailToken,
     });
+
+    if (dto.walletAddress) {
+      await this.userRepo.addWalletAddress(user.id, dto.walletAddress);
+    }
+
+    return user;
   }
 
   async verifyEmail(token: string) {
@@ -65,5 +71,40 @@ export class UserService {
     const user = await this.userRepo.findById(userId);
     if (!user) throw new NotFoundException(`User ${userId} not found`);
     return this.userRepo.updateStatus(userId, status);
+  }
+
+  async addWalletAddress(userId: string, address: string) {
+    return this.userRepo.addWalletAddress(userId, address);
+  }
+
+  async findByWalletAddress(address: string) {
+    return this.userRepo.findByWalletAddress(address);
+  }
+
+  // Auto-register a wallet-only account (no email/password required).
+  // Used by walletLogin when no existing account is linked to the address.
+  async createWalletOnlyAccount(walletAddress: string): Promise<{ id: string; email: string; role: string; status: string; emailVerified: boolean; kycProfile: null }> {
+    // Generate a deterministic placeholder email from the wallet address
+    const shortAddr = walletAddress.slice(0, 8).toLowerCase();
+    const placeholderEmail = `wallet-${shortAddr}@chainstrike.testnet`;
+
+    // If placeholder email already exists (race condition), use the existing user
+    const existing = await this.userRepo.findByEmail(placeholderEmail);
+    if (existing) {
+      await this.userRepo.addWalletAddress(existing.id, walletAddress);
+      return { ...existing, kycProfile: null };
+    }
+
+    const passwordHash = await argon2.hash(randomBytes(32).toString('hex'), {
+      type: argon2.argon2id,
+    });
+    const user = await this.userRepo.create({
+      email: placeholderEmail,
+      passwordHash,
+      role: 'INVESTOR',
+      emailToken: randomBytes(32).toString('hex'),
+    });
+    await this.userRepo.addWalletAddress(user.id, walletAddress);
+    return { ...user, emailVerified: true, kycProfile: null };
   }
 }
