@@ -268,6 +268,12 @@ export class MatchingService implements OnApplicationBootstrap {
     this.gateway.broadcastOrderbookUpdate(assetId, { assetId, ...depth });
   }
 
+  restoreOrderQuantity(assetId: string, orderId: string, qty: bigint): void {
+    this.bookStore.restoreQuantity(assetId, 'sell', orderId, qty);
+    const depth = this.bookStore.getDepth(assetId, 20);
+    this.gateway.broadcastOrderbookUpdate(assetId, { assetId, ...depth });
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async retryOrphanedSettlements(): Promise<void> {
     const cutoff = new Date(Date.now() - 30_000); // 30s old
@@ -277,6 +283,7 @@ export class MatchingService implements OnApplicationBootstrap {
         createdAt: { lt: cutoff },
         settlementAttempts: { lt: 5 },
       },
+      include: { buyOrder: { select: { marketId: true } } },
     });
 
     for (const trade of orphaned) {
@@ -285,13 +292,22 @@ export class MatchingService implements OnApplicationBootstrap {
           where: { id: trade.id },
           data: { settlementAttempts: { increment: 1 } },
         });
+        const market = await this.prisma.market.findUnique({ where: { id: trade.marketId } });
+        const usdcAmount = trade.totalValue - trade.platformFee;
         await axios.post(`${this.settlementServiceUrl}/internal/settle`, {
           tradeId: trade.id,
-          assetId: trade.assetId,
+          assetId: market?.assetId ?? trade.marketId,
+          asaId: market?.asaId ?? 0,
           buyOrderId: trade.buyOrderId,
           sellOrderId: trade.sellOrderId,
+          buyerUserId: trade.buyerUserId,
+          sellerUserId: trade.sellerUserId,
+          buyerWalletAddress: trade.buyerWalletAddress,
+          sellerWalletAddress: trade.sellerWalletAddress,
+          tokenAmount: trade.quantity.toString(),
+          usdcAmount: usdcAmount.toString(),
+          platformFee: trade.platformFee.toString(),
           price: trade.price.toString(),
-          quantity: trade.quantity.toString(),
         }, { timeout: 5000 });
       } catch (err) {
         this.logger.warn(`Settlement retry failed for trade ${trade.id}: ${(err as Error).message}`);
