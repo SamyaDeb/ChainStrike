@@ -28,14 +28,28 @@ export class InternalController {
   async addToWhitelist(@Body() payload: WhitelistAddPayload) {
     this.logger.log(`Internal whitelist add: ${payload.walletAddress} for asset ${payload.asaId}`);
     try {
-      await this.whitelistService.addToWhitelist(
-        payload.walletAddress,
-        payload.assetId,
-        payload.asaId,
-        payload.userId,
-        payload.tier,
-        payload.expiresAt ? new Date(payload.expiresAt) : undefined,
-      );
+      // Always register the wallet-level on-chain identity profile (asaId=0) on KYC
+      // verification, regardless of whether an eligible asset was supplied.
+      if (payload.walletAddress) {
+        await this.whitelistService.registerOnChainIdentity(
+          payload.walletAddress,
+          payload.userId,
+          payload.tier,
+          payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+        );
+      }
+
+      // Per-asset whitelist add (only when a concrete asset was provided).
+      if (payload.assetId && payload.assetId !== WhitelistService.IDENTITY_ASSET_ID) {
+        await this.whitelistService.addToWhitelist(
+          payload.walletAddress,
+          payload.assetId,
+          payload.asaId,
+          payload.userId,
+          payload.tier,
+          payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+        );
+      }
       return { success: true };
     } catch (err) {
       this.logger.error(`Whitelist add failed: ${(err as Error).message}`);

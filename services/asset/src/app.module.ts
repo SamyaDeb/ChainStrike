@@ -18,7 +18,6 @@ import { JwtStrategy } from './auth/jwt.strategy';
         AWS_S3_BUCKET_DOCUMENTS: Joi.string().required(),
         JWT_SECRET: Joi.string().required(),
         ALGORAND_ADMIN_MNEMONIC: Joi.string().required(),
-        ORDERBOOK_SERVICE_URL: Joi.string().default('http://localhost:3003'),
       }).options({ allowUnknown: true }),
     }),
     ScheduleModule.forRoot(),

@@ -77,11 +77,42 @@ export class WhitelistService {
     this.logger.log(`Whitelist event: removed ${walletAddress} for asset ${asaId} reason=${reason}`);
   }
 
+  // ─── Global on-chain identity profile ─────────────────────────────────────────
+  // Registers the wallet in WhitelistRegistry under the sentinel asaId=0, which is
+  // a wallet-level KYC attestation independent of any asset. Guarantees every KYC'd
+  // wallet has a real on-chain profile even when no eligible assets exist yet.
+
+  static readonly IDENTITY_ASSET_ID = '__identity__';
+
+  async registerOnChainIdentity(
+    walletAddress: string,
+    userId: string,
+    tier: number,
+    expiresAt?: Date,
+  ): Promise<void> {
+    await this.addToWhitelist(
+      walletAddress,
+      WhitelistService.IDENTITY_ASSET_ID,
+      0,
+      userId,
+      tier,
+      expiresAt,
+    );
+  }
+
   // ─── Handle KYC Verified event ────────────────────────────────────────────────
   // When investor completes KYC, add them to all eligible asset whitelists
 
   async handleKycVerified(payload: KycVerifiedPayload): Promise<void> {
     if (!payload.walletAddress) return; // Wallet not connected yet — handled when wallet connects
+
+    // Always create the wallet-level on-chain identity profile first.
+    await this.registerOnChainIdentity(
+      payload.walletAddress,
+      payload.userId,
+      payload.tier,
+      payload.expiresAt ? new Date(payload.expiresAt) : undefined,
+    );
 
     // Get all active assets this investor qualifies for based on KYC tier and jurisdiction
     const eligibleAssets = await this.whitelistRepo.findEligibleAssets(

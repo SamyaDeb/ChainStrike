@@ -37,4 +37,9 @@ export class NotificationConsumer {
   onComplianceFlagged(@Payload() envelope: EventEnvelope<unknown>) {
     this.notifications.handle(Topics.COMPLIANCE_FLAGGED, envelope);
   }
+
+  @MessagePattern(Topics.ASSET_LP_TOKENS_READY)
+  onLpTokensReady(@Payload() envelope: EventEnvelope<unknown>) {
+    this.notifications.handle(Topics.ASSET_LP_TOKENS_READY, envelope);
+  }
 }

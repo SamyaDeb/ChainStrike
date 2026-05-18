@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsString, IsEnum, IsInt, IsOptional, IsDefined, Min, Max, MinLength, MaxLength, Matches,
+  IsString, IsEnum, IsInt, IsOptional, Min, Max, MinLength, MaxLength, Matches, IsNotEmpty,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -35,10 +35,10 @@ export class CreateAssetDto {
   @MaxLength(2000)
   description: string;
 
-  @ApiProperty({ description: 'Total supply in base units (e.g. 1_000_000_000_000 for 1M tokens with 6 decimals)' })
-  @IsDefined()
-  @Transform(({ value }) => BigInt(value))
-  totalSupply: bigint;
+  @ApiPropertyOptional({ description: 'Derived server-side from liquidityDepositUsdc / pricePerToken. Pass only if overriding.' })
+  @Transform(({ value }) => (value !== undefined ? BigInt(value) : undefined))
+  @IsOptional()
+  totalSupply?: bigint;
 
   @ApiProperty({ default: 6 })
   @IsInt()
@@ -47,8 +47,8 @@ export class CreateAssetDto {
   decimals: number;
 
   @ApiProperty({ description: 'Price per token in micro-USDC (6 decimal places)' })
-  @IsDefined()
   @Transform(({ value }) => BigInt(value))
+  @IsNotEmpty()
   pricePerToken: bigint;
 
   @ApiPropertyOptional({ default: 0 })
@@ -103,4 +103,9 @@ export class CreateAssetDto {
   @IsString()
   @IsOptional()
   issuerWalletAddress?: string;
+
+  @ApiPropertyOptional({ description: 'Token logo — data URL (base64) or hosted URL (https://…)' })
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
 }

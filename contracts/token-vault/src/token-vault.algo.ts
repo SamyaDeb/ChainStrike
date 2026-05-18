@@ -88,4 +88,47 @@ export class TokenVault extends Contract {
 
     this.distributedAmount.value = this.distributedAmount.value + amount;
   }
+
+  // ─── Withdraw RWA tokens to admin for Tinyman pool deployment ────────────────
+  // Admin calls this to retrieve poolTokenAmount tokens from vault before
+  // bootstrapping the Tinyman AMM pool. These tokens represent the pool's
+  // initial RWA liquidity side.
+
+  withdrawForPool(recipient: Account, amount: uint64): void {
+    assert(Txn.sender === this.admin.value, 'Only admin');
+    itxn.assetTransfer({
+      assetReceiver: recipient,
+      xferAsset: this.asaId.value,
+      assetAmount: amount,
+      fee: 0,
+    }).submit();
+  }
+
+  // ─── Withdraw USDC to admin for Tinyman pool deployment ──────────────────────
+  // Admin calls this to retrieve USDC held in vault (released from issuance
+  // escrow) before bootstrapping the Tinyman AMM pool.
+
+  withdrawUsdcForPool(recipient: Account, usdcAsaId: uint64, amount: uint64): void {
+    assert(Txn.sender === this.admin.value, 'Only admin');
+    itxn.assetTransfer({
+      assetReceiver: recipient,
+      xferAsset: usdcAsaId,
+      assetAmount: amount,
+      fee: 0,
+    }).submit();
+  }
+
+  // ─── Opt vault into LP token (issued by Tinyman at pool creation) ────────────
+  // Must be called after bootstrapPool so vault can receive LP tokens.
+  // LP tokens represent the issuer's share of the AMM pool.
+
+  optIntoLpToken(lpAsaId: uint64): void {
+    assert(Txn.sender === this.admin.value, 'Only admin');
+    itxn.assetTransfer({
+      assetReceiver: Global.currentApplicationAddress,
+      xferAsset: lpAsaId,
+      assetAmount: 0,
+      fee: 0,
+    }).submit();
+  }
 }

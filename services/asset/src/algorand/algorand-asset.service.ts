@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import algosdk from 'algosdk';
+import { Bootstrap, AddLiquidity, poolUtils, type InitiatorSigner } from '@tinymanorg/tinyman-js-sdk';
 import { buildAsaCreateTransaction, hasOptedIn } from '@chainstrike/algorand';
 
 @Injectable()
@@ -570,6 +571,230 @@ export class AlgorandAssetService {
     await algosdk.waitForConfirmation(this.algodClient, txid, 4);
     this.logger.log(`Vault distributed ${amount} tokens to issuer ${issuerAddress} (txId=${txid})`);
     return txid;
+  }
+
+  // ─── Vault: withdraw RWA tokens to admin for pool deployment ────────────────
+  async vaultWithdrawForPool(vaultAppId: number, asaId: number, amount: bigint): Promise<string> {
+    const adminAddr = this.adminAccount.addr.toString();
+    const sp = await this.algodClient.getTransactionParams().do();
+    const adminPk = algosdk.decodeAddress(adminAddr).publicKey;
+    const txn = algosdk.makeApplicationNoOpTxnFromObject({
+      sender: adminAddr,
+      appIndex: vaultAppId,
+      appArgs: [
+        Buffer.from('2839298a', 'hex'),  // withdrawForPool(address,uint64)void
+        adminPk,
+        algosdk.encodeUint64(amount),
+      ],
+      accounts: [adminAddr],
+      foreignAssets: [asaId],
+      suggestedParams: { ...sp, flatFee: true, fee: 2000 },
+    });
+    const { txid } = await this.algodClient.sendRawTransaction(txn.signTxn(this.adminAccount.sk)).do();
+    await algosdk.waitForConfirmation(this.algodClient, txid, 4);
+    this.logger.log(`Vault ${vaultAppId} withdrew ${amount} tokens to admin for pool (txId=${txid})`);
+    return txid;
+  }
+
+  // ─── Vault: withdraw USDC to admin for pool deployment ───────────────────────
+  async vaultWithdrawUsdcForPool(vaultAppId: number, amount: bigint): Promise<string> {
+    const adminAddr = this.adminAccount.addr.toString();
+    const sp = await this.algodClient.getTransactionParams().do();
+    const adminPk = algosdk.decodeAddress(adminAddr).publicKey;
+    const txn = algosdk.makeApplicationNoOpTxnFromObject({
+      sender: adminAddr,
+      appIndex: vaultAppId,
+      appArgs: [
+        Buffer.from('72d2a6c9', 'hex'),  // withdrawUsdcForPool(address,uint64,uint64)void
+        adminPk,
+        algosdk.encodeUint64(this.usdcAsaId),
+        algosdk.encodeUint64(amount),
+      ],
+      accounts: [adminAddr],
+      foreignAssets: [this.usdcAsaId],
+      suggestedParams: { ...sp, flatFee: true, fee: 2000 },
+    });
+    const { txid } = await this.algodClient.sendRawTransaction(txn.signTxn(this.adminAccount.sk)).do();
+    await algosdk.waitForConfirmation(this.algodClient, txid, 4);
+    this.logger.log(`Vault ${vaultAppId} withdrew ${amount} micro-USDC to admin for pool (txId=${txid})`);
+    return txid;
+  }
+
+  // ─── Vault: opt into LP token so vault can receive LP after pool creation ────
+  async vaultOptIntoLpToken(vaultAppId: number, lpAsaId: number): Promise<string> {
+    const adminAddr = this.adminAccount.addr.toString();
+    const vaultAddress = algosdk.getApplicationAddress(vaultAppId).toString();
+    // Fund vault for LP token opt-in storage (0.1 ALGO)
+    const sp = await this.algodClient.getTransactionParams().do();
+    const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      sender: adminAddr,
+      receiver: vaultAddress,
+      amount: 100_000n,
+      suggestedParams: sp,
+    });
+    const optInTxn = algosdk.makeApplicationNoOpTxnFromObject({
+      sender: adminAddr,
+      appIndex: vaultAppId,
+      appArgs: [Buffer.from('ab0756d8', 'hex'), algosdk.encodeUint64(lpAsaId)],  // optIntoLpToken(uint64)void
+      foreignAssets: [lpAsaId],
+      suggestedParams: { ...sp, flatFee: true, fee: 2000 },
+    });
+    algosdk.assignGroupID([fundTxn, optInTxn]);
+    const signed = [fundTxn, optInTxn].map((t) => t.signTxn(this.adminAccount.sk));
+    const { txid } = await this.algodClient.sendRawTransaction(signed).do();
+    await algosdk.waitForConfirmation(this.algodClient, txid, 4);
+    this.logger.log(`Vault ${vaultAppId} opted into LP token ${lpAsaId} (txId=${txid})`);
+    return txid;
+  }
+
+  // ─── Send LP tokens from admin → vault ───────────────────────────────────────
+  // Called after bootstrapTinymanPool. LP tokens are the issuer's pool ownership
+  // receipt; vault holds them until issuer opts in and claims via Tinyman UI.
+  async sendLpToVault(vaultAppId: number, lpAsaId: number, lpAmount: bigint): Promise<string> {
+    const adminAddr = this.adminAccount.addr.toString();
+    const vaultAddress = algosdk.getApplicationAddress(vaultAppId).toString();
+    const sp = await this.algodClient.getTransactionParams().do();
+    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: adminAddr,
+      receiver: vaultAddress,
+      assetIndex: lpAsaId,
+      amount: lpAmount,
+      suggestedParams: sp,
+    });
+    const { txid } = await this.algodClient.sendRawTransaction(txn.signTxn(this.adminAccount.sk)).do();
+    await algosdk.waitForConfirmation(this.algodClient, txid, 4);
+    this.logger.log(`Sent ${lpAmount} LP tokens (ASA ${lpAsaId}) to vault ${vaultAppId} (txId=${txid})`);
+    return txid;
+  }
+
+  // ─── Bootstrap Tinyman V2 pool + add initial liquidity ───────────────────────
+  // Creates a new RWA/USDC pool on Tinyman V2 testnet and seeds it with initial reserves.
+  // poolTokenAmount RWA tokens + usdcAmount USDC → LP tokens held by admin (platform-owned).
+
+  private getTinymanAlgodClient(): any {
+    // Tinyman SDK bundles algosdk v2 which has setIntDecoding. We must create the
+    // algod client using that version so SDK-internal API calls work correctly.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const algosdk2 = require('@tinymanorg/tinyman-js-sdk/node_modules/algosdk');
+    return new algosdk2.Algodv2(
+      this.config.get<string>('ALGORAND_ALGOD_TOKEN', ''),
+      this.config.get<string>('ALGORAND_ALGOD_SERVER', 'https://testnet-api.algonode.cloud'),
+      this.config.get<string>('ALGORAND_ALGOD_PORT', '443'),
+    );
+  }
+
+  async bootstrapTinymanPool(params: {
+    asaId: number;
+    asaTicker: string;
+    asaDecimals: number;
+    poolTokenAmount: bigint;
+    usdcAmount: bigint;
+    issuerWalletAddress: string;
+  }): Promise<{
+    poolAddress: string;
+    lpAssetId: number;
+    issuerLpAmount: bigint;
+    bootstrapTxId: string;
+    addLiquidityTxId: string;
+  }> {
+    const { asaId, asaTicker, poolTokenAmount, usdcAmount } = params;
+    const network: 'testnet' | 'mainnet' =
+      this.config.get<string>('ALGORAND_NETWORK', 'testnet') === 'mainnet' ? 'mainnet' : 'testnet';
+    const adminAddr = this.adminAccount.addr.toString();
+    // Must use algosdk v2 client for Tinyman SDK (v3 removed setIntDecoding used internally)
+    const algodAny = this.getTinymanAlgodClient();
+
+    // Tinyman sorts assets by ID: lower ID = asset1
+    const asset1ID = Math.min(asaId, this.usdcAsaId);
+    const asset2ID = Math.max(asaId, this.usdcAsaId);
+    const isAsaFirst = asaId < this.usdcAsaId;
+
+    // Admin signs all initiator transactions server-side
+    const initiatorSigner: InitiatorSigner = async (txGroupList) =>
+      txGroupList.flat().map(({ txn }) => txn.signTxn(this.adminAccount.sk));
+
+    // 1. Bootstrap — creates the pool LogicSig account, opts it into both assets + LP token
+    this.logger.log(`Bootstrapping Tinyman V2 pool: ASA ${asaId} / USDC ${this.usdcAsaId} on ${network}`);
+    const bootstrapTxns = await Bootstrap.v2.generateTxns({
+      client: algodAny,
+      network,
+      asset_1: { id: String(asset1ID), unit_name: isAsaFirst ? asaTicker : 'USDC' },
+      asset_2: { id: String(asset2ID), unit_name: isAsaFirst ? 'USDC' : asaTicker },
+      initiatorAddr: adminAddr,
+    });
+    const { signedTxns: signedBootstrap, txnIDs: bootstrapTxnIDs } = await Bootstrap.v2.signTxns({
+      txGroup: bootstrapTxns,
+      network,
+      initiatorSigner,
+      asset1ID,
+      asset2ID,
+    });
+    await this.algodClient.sendRawTransaction(signedBootstrap).do();
+    await algosdk.waitForConfirmation(this.algodClient, bootstrapTxnIDs[0], 8);
+    this.logger.log(`Pool bootstrapped: txId=${bootstrapTxnIDs[0]}`);
+
+    // 2. Fetch pool info — LP ASA ID and pool address are now known
+    const poolInfo = await poolUtils.v2.getPoolInfo({ client: algodAny, network, asset1ID, asset2ID });
+    const lpAssetId = poolInfo.poolTokenID as number;
+    // LogicSigAccount.address() returns the base32 address string
+    const poolAddress = (poolInfo.account.address as unknown as () => string)();
+    this.logger.log(`Tinyman V2 pool: address=${poolAddress}, lpAssetId=${lpAssetId}`);
+
+    // 3. Unfreeze pool address for the RWA ASA (defaultFrozen=true freezes all opt-ins)
+    const spFreeze = await this.algodClient.getTransactionParams().do();
+    const unfreezeTxn = algosdk.makeAssetFreezeTxnWithSuggestedParamsFromObject({
+      sender: adminAddr,
+      assetIndex: asaId,
+      freezeTarget: poolAddress,
+      frozen: false,
+      suggestedParams: spFreeze,
+    });
+    const { txid: unfreezeTxid } = await this.algodClient
+      .sendRawTransaction(unfreezeTxn.signTxn(this.adminAccount.sk)).do();
+    await algosdk.waitForConfirmation(this.algodClient, unfreezeTxid, 4);
+    this.logger.log(`Pool unfrozen for ASA ${asaId}`);
+
+    // 4. Admin opts into LP token (required to receive LP tokens from the pool contract)
+    const spOptIn = await this.algodClient.getTransactionParams().do();
+    const lpOptInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: adminAddr,
+      receiver: adminAddr,
+      assetIndex: lpAssetId,
+      amount: 0,
+      suggestedParams: spOptIn,
+    });
+    const { txid: lpOptInTxid } = await this.algodClient
+      .sendRawTransaction(lpOptInTxn.signTxn(this.adminAccount.sk)).do();
+    await algosdk.waitForConfirmation(this.algodClient, lpOptInTxid, 4);
+    this.logger.log(`Admin opted into LP token ${lpAssetId}`);
+
+    // 5. Add initial liquidity — admin deposits both assets, receives LP tokens
+    const asset1Amount = isAsaFirst ? poolTokenAmount : usdcAmount;
+    const asset2Amount = isAsaFirst ? usdcAmount : poolTokenAmount;
+    const addLiqTxns = await AddLiquidity.v2.initial.generateTxns({
+      client: algodAny,
+      pool: poolInfo,
+      network,
+      poolAddress,
+      asset1In: { id: asset1ID, amount: asset1Amount },
+      asset2In: { id: asset2ID, amount: asset2Amount },
+      poolTokenId: lpAssetId,
+      initiatorAddr: adminAddr,
+    });
+    const signedAddLiq = await AddLiquidity.v2.initial.signTxns({ txGroup: addLiqTxns, initiatorSigner });
+    const { txid: addLiqTxid } = await this.algodClient.sendRawTransaction(signedAddLiq).do();
+    await algosdk.waitForConfirmation(this.algodClient, addLiqTxid, 8);
+    this.logger.log(`Initial liquidity added: txId=${addLiqTxid}, tokens=${poolTokenAmount}, usdc=${usdcAmount}`);
+
+    // 6. Read admin LP token balance — LP is custodied by admin on behalf of issuer
+    // (Issuer cannot receive LP directly without first opting into the LP ASA themselves.
+    //  LP stays with admin; issuerLpAmount is recorded so issuer can claim after opting in.)
+    const adminLpInfo = await this.algodClient.accountAssetInformation(adminAddr, lpAssetId).do();
+    const adminLpHolding = (adminLpInfo as any).assetHolding ?? (adminLpInfo as any)['asset-holding'];
+    const issuerLpAmount = BigInt(adminLpHolding?.amount ?? 0);
+    this.logger.log(`LP tokens minted: ${issuerLpAmount} (custodied by admin for issuer ${params.issuerWalletAddress})`);
+
+    return { poolAddress, lpAssetId, issuerLpAmount, bootstrapTxId: bootstrapTxnIDs[0], addLiquidityTxId: addLiqTxid };
   }
 
   async freezeAccount(asaId: number, targetAddress: string, freeze: boolean) {

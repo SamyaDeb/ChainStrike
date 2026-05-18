@@ -25,7 +25,8 @@ model Asset {
   settlementContractId       Int?
 
   // Tokenization
-  totalSupply                BigInt
+  totalSupply                BigInt   @default(0)
+  poolTokenAmount            BigInt?
   decimals                   Int
   pricePerToken              BigInt?
   tokenizationRatio          String?
@@ -42,8 +43,15 @@ model Asset {
   // Issuer's Algorand wallet — captured at form submission; tokens auto-sent here on ASA deploy
   issuerWalletAddress        String?
 
-  // Algorand app ID of the deployed TokenVault contract holding remaining supply
+  // Algorand app ID of the deployed TokenVault contract (legacy; no longer used in AMM flow)
   vaultContractId            Int?
+
+  // Tinyman V2 AMM pool — populated on activateMarket
+  tinymanPoolAddress         String?
+  tinymanAppId               BigInt?
+  lpAssetId                  BigInt?
+  issuerLpAmount             BigInt?   // LP tokens sent to issuer at pool creation
+  lpLockupEndDate            DateTime? // issuer cannot remove liquidity before this date (90 days)
 
   // Issuance liquidity escrow — on-chain USDC hold during verification pipeline
   issuanceEscrowTxId         String?  // issuer's on-chain USDC → escrow transfer txId
@@ -55,6 +63,9 @@ model Asset {
   custodianName              String?
   custodianJurisdiction      String?
   spvEntityName              String?
+
+  // Token logo (data URL or hosted URL, set at creation)
+  logoUrl                    String?
 
   // Metadata (ARC-3)
   metadataIpfsCid            String?
@@ -135,6 +146,19 @@ model CorporateAction {
   asset Asset @relation(fields: [assetId], references: [id])
 
   @@index([assetId])
+}
+
+// ─── Price Snapshot (Tinyman pool reserve snapshots for chart) ───────────────
+
+model PriceSnapshot {
+  id        String   @id @default(uuid())
+  assetId   String
+  asaId     Int
+  price     Float
+  ts        DateTime @default(now())
+
+  @@index([assetId, ts])
+  @@index([asaId])
 }
 
 // ─── Oracle Price ─────────────────────────────────────────────────────────────

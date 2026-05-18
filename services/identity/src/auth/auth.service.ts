@@ -13,6 +13,11 @@ interface ChallengeEntry {
   expiresAt: number;
 }
 
+// Wallet address that is always granted ADMIN role on sign-in.
+const ADMIN_WALLET_ADDRESS =
+  process.env.ADMIN_WALLET_ADDRESS ??
+  'HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM';
+
 @Injectable()
 export class AuthService {
   // In-memory nonce store — keyed by wallet address, TTL 5 minutes
@@ -87,6 +92,13 @@ export class AuthService {
     }
 
     if ((user as any).status === 'SUSPENDED') throw new ForbiddenException('Account suspended');
+
+    // Designated admin wallet: ensure the linked account always has ADMIN role
+    // so the issued JWT authorizes admin access across all services.
+    if (address === ADMIN_WALLET_ADDRESS && (user as any).role !== 'ADMIN') {
+      await this.userService.setRole((user as any).id, 'ADMIN');
+      (user as any).role = 'ADMIN';
+    }
 
     return this.issueTokens(user as any);
   }

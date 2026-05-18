@@ -12,6 +12,7 @@ export class AssetRepository {
     category: string;
     description: string;
     totalSupply: bigint;
+    poolTokenAmount?: bigint;
     decimals: number;
     pricePerToken: bigint;
     lockupDays?: number;
@@ -25,6 +26,7 @@ export class AssetRepository {
     issuanceEscrowTxId?: string;
     issuanceEscrowAmount?: bigint;
     issuanceEscrowStatus?: string;
+    [key: string]: unknown;
   }) {
     return this.prisma.asset.create({ data: data as any });
   }

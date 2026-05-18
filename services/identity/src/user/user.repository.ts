@@ -10,6 +10,7 @@ export class UserRepository {
     passwordHash: string;
     role: 'INVESTOR' | 'ISSUER';
     emailToken: string;
+    fullName?: string;
   }) {
     // Auto-verify email in non-production so testnet registrations work without email flow
     const autoVerify = process.env['NODE_ENV'] !== 'production';
@@ -20,6 +21,7 @@ export class UserRepository {
         role: data.role,
         emailToken: data.emailToken,
         emailVerified: autoVerify,
+        ...(data.fullName ? { fullName: data.fullName } : {}),
       },
       select: { id: true, email: true, role: true, status: true, createdAt: true },
     });
@@ -48,10 +50,12 @@ export class UserRepository {
       select: {
         id: true,
         email: true,
+        fullName: true,
         role: true,
         status: true,
         emailVerified: true,
         mfaEnabled: true,
+        createdAt: true,
         kycProfile: { select: { tier: true } },
       },
     });

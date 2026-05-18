@@ -28,6 +28,7 @@ export class UserService {
       passwordHash,
       role,
       emailToken,
+      fullName: dto.fullName?.trim() || undefined,
     });
 
     if (dto.walletAddress) {
@@ -79,6 +80,10 @@ export class UserService {
 
   async findByWalletAddress(address: string) {
     return this.userRepo.findByWalletAddress(address);
+  }
+
+  async setRole(userId: string, role: string) {
+    return this.userRepo.updateRole(userId, role);
   }
 
   // Auto-register a wallet-only account (no email/password required).
