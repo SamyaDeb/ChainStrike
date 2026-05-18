@@ -6,6 +6,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { IsEnum, IsInt, IsOptional, IsString, Min, Max } from 'class-validator';
 import { ConfigService } from '@nestjs/config';
 import { AssetService } from './asset.service';
+import { PricefeedService } from '../pricefeed/pricefeed.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 
 class VerificationStageDto {
@@ -27,19 +28,12 @@ class DistributeTokensDto {
   amount: string;
 }
 
-class SeedOrdersDto {
-  @IsString()
-  issuerWalletAddress: string;
-
-  @IsString()
-  seedQuantity: string;
-}
-
 @ApiTags('assets')
 @Controller('assets')
 export class AssetController {
   constructor(
     private readonly assetService: AssetService,
+    private readonly pricefeed: PricefeedService,
     private readonly config: ConfigService,
   ) {}
 
@@ -111,17 +105,6 @@ export class AssetController {
     return this.assetService.activateMarket(id, req.user.id);
   }
 
-  @Post(':id/seed-orders')
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Seed initial SELL orders in orderbook from issuer wallet (admin only)' })
-  async seedOrders(
-    @Param('id') id: string,
-    @Body() body: SeedOrdersDto,
-  ) {
-    return this.assetService.seedOrders(id, body.issuerWalletAddress, BigInt(body.seedQuantity));
-  }
-
   @Post(':id/verification-stage')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
@@ -144,6 +127,21 @@ export class AssetController {
     return this.assetService.dispenseTestnetUsdc(body.walletAddress);
   }
 
+  // Unfreeze an investor wallet for this asset ASA so Tinyman can deliver tokens.
+  // RWA ASAs are minted defaultFrozen=true; admin (freeze manager) must unfreeze
+  // each buyer before their first swap. Testnet only.
+  @Post(':id/dev-unfreeze')
+  @ApiOperation({ summary: '[TESTNET] Unfreeze a wallet for this ASA' })
+  async devUnfreeze(
+    @Param('id') id: string,
+    @Body() body: { walletAddress: string },
+  ) {
+    if (!body.walletAddress) {
+      throw new Error('walletAddress required');
+    }
+    return this.assetService.unfreezeWalletForAsset(id, body.walletAddress);
+  }
+
   // Called by the investor frontend before placing the first BUY order.
   // Opts the platform escrow address into USDC so it can receive payment.
   @Post('setup-escrow')
@@ -163,5 +161,21 @@ export class AssetController {
     @Body() body: DistributeTokensDto,
   ) {
     return this.assetService.distributeTokens(id, body.issuerWalletAddress, BigInt(body.amount));
+  }
+
+  @Get(':id/price')
+  @ApiOperation({ summary: 'Latest pool price + 24h change for an asset' })
+  async getLatestPrice(@Param('id') id: string) {
+    return this.pricefeed.getLatestPrice(id);
+  }
+
+  @Get(':id/price-history')
+  @ApiOperation({ summary: 'Price chart history (1D/1W/1M/3M/1Y/ALL)' })
+  @ApiQuery({ name: 'range', enum: ['1D', '1W', '1M', '3M', '1Y', 'ALL'], required: false })
+  async getPriceHistory(
+    @Param('id') id: string,
+    @Query('range') range: '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL' = '1D',
+  ) {
+    return this.pricefeed.getPriceHistory(id, range);
   }
 }
