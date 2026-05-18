@@ -1,3 +1,5 @@
+<img width="1458" height="797" alt="Screenshot 2026-05-19 at 4 09 06 AM" src="https://github.com/user-attachments/assets/29691772-9917-4e2b-849c-d0ea84b5521c" />
+
 # ChainStrike
 
 **Institutional RWA tokenization and AMM trading on Algorand.**
