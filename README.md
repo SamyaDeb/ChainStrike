@@ -1,4 +1,5 @@
-# ChainStrike — Institution-Grade RWA Orderbook Exchange on Algorand
+<img width="1458" height="797" alt="Screenshot 2026-05-19 at 4 09 06 AM" src="https://github.com/user-attachments/assets/25a52c2d-1a1f-414f-bd90-31f1c9d7648b" />
+# ChainStrike — Institution-Grade RWA Orderbook Exchange on Algorand|
 
 A permissioned, compliant orderbook-based exchange for Real World Asset (RWA) tokenization and trading, built on the Algorand blockchain. ChainStrike enables institutions to issue tokenized assets, manage KYC/KYB compliance, and execute atomic settlement with cryptographic certainty.
 
