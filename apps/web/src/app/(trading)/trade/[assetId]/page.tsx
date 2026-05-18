@@ -2,138 +2,244 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useWallet } from '@txnlab/use-wallet-react';
-import { OrderBook } from '@/components/trading/order-book';
-import { OrderForm } from '@/components/trading/order-form';
 import { PriceChart } from '@/components/trading/price-chart';
-import { AssetOptIn } from '@/components/trading/asset-opt-in';
-import { SettlementSigner } from '@/components/SettlementSigner';
-import { useOrderBook } from '@/hooks/use-order-book';
+import { SwapPanel } from '@/components/trading/swap-panel';
+import { getPoolPrice } from '@/lib/tinyman';
 
-export default function TradePage({ params }: { params: { assetId: string } }) {
+const CATEGORY_LABELS: Record<string, string> = {
+  PRECIOUS_METALS: 'Precious Metals',
+  REAL_ESTATE: 'Real Estate',
+  PRIVATE_DEBT: 'Private Debt',
+  CORPORATE_BOND: 'Corporate Bond',
+  COMMODITY: 'Commodity',
+  PRIVATE_EQUITY: 'Private Equity',
+};
+
+export default function AssetDetailPage({ params }: { params: { assetId: string } }) {
   const { assetId } = params;
-  const { activeAddress, activeWallet, transactionSigner } = useWallet();
 
-  const { data: asset } = useQuery({
+  const { data: asset, isLoading } = useQuery({
     queryKey: ['asset', assetId],
     queryFn: async () => {
       const { data } = await api.get(`/assets/${assetId}`);
-      return data;
-    },
-  });
-
-  const { snapshot, connected } = useOrderBook(assetId);
-
-  const { data: myOrders } = useQuery({
-    queryKey: ['my-orders'],
-    queryFn: async () => {
-      const { data } = await api.get('/orders/my');
-      return data as Array<{
+      return data as {
         id: string;
-        side: string;
-        orderType: string;
-        price?: string;
-        quantity: string;
-        remainingQuantity: string;
+        name: string;
+        ticker: string;
+        category: string;
+        description: string;
         status: string;
-        createdAt: string;
-      }>;
+        asaId: number | null;
+        decimals: number;
+        pricePerToken: string;
+        liquidityDepositUsdc: string;
+        poolTokenAmount: string | null;
+        tinymanPoolAddress: string | null;
+        lpAssetId: number | null;
+        custodianName: string | null;
+        custodianJurisdiction: string | null;
+        spvEntityName: string | null;
+        minimumInvestment: string;
+        lockupDays: number;
+        listedAt: string | null;
+        logoUrl: string | null;
+      };
     },
   });
+
+  // Backend snapshot price (has 24h change). May be stale or missing.
+  const { data: priceInfo } = useQuery({
+    queryKey: ['price', assetId],
+    queryFn: async () => {
+      const { data } = await api.get(`/assets/${assetId}/price`);
+      return data as { price: number; ts: string; change24h: number } | null;
+    },
+    refetchInterval: 30_000,
+    enabled: !!asset?.asaId,
+  });
+
+  // Live on-chain pool price — same source the swap panel quotes from.
+  // This is the authoritative spot price; prefer it over the snapshot.
+  const { data: livePoolPrice } = useQuery({
+    queryKey: ['poolPrice', asset?.asaId],
+    queryFn: async () => getPoolPrice(asset!.asaId as number),
+    refetchInterval: 15_000,
+    enabled: !!asset?.asaId && asset?.status === 'ACTIVE',
+  });
+
+  const page: React.CSSProperties = {
+    background: '#fff',
+    minHeight: '100vh',
+    fontFamily: 'var(--font-plus-jakarta, "Plus Jakarta Sans", system-ui)',
+    color: '#0a0a0a',
+    WebkitFontSmoothing: 'antialiased',
+  };
+
+  const wrap: React.CSSProperties = {
+    maxWidth: 1200,
+    margin: '0 auto',
+    padding: '32px 24px 80px',
+  };
+
+  if (isLoading || !asset) {
+    return (
+      <div style={page}>
+        <div style={wrap}>
+          <div style={{ color: '#aaa', fontSize: 14 }}>Loading…</div>
+        </div>
+      </div>
+    );
+  }
+
+  const listingPrice = Number(asset.pricePerToken) / 1_000_000;
+  // Prefer the live on-chain pool price (matches the swap quote), then the
+  // backend snapshot, then the listing price as a last resort.
+  const currentPrice = livePoolPrice ?? priceInfo?.price ?? listingPrice;
+  const change24h = priceInfo?.change24h ?? 0;
+  const isPositive = change24h >= 0;
+  const priceIsLive = livePoolPrice != null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Settlement signer (invisible) */}
-      {activeAddress && activeWallet && (
-        <SettlementSigner
-          walletAddress={activeAddress}
-          walletSigner={transactionSigner}
-        />
-      )}
+    <div style={page}>
+      <div style={wrap}>
 
-      {/* Asset header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">
-            {asset?.name ?? '—'}
-            <span className="ml-2 text-base font-mono text-gray-400">{asset?.ticker}</span>
-          </h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-gray-500'}`} />
-            <span className="text-xs text-gray-500">{connected ? 'Live' : 'Connecting…'}</span>
-            {snapshot?.lastTrade && (
-              <span className="text-sm font-semibold text-white ml-3">
-                ${(Number(snapshot.lastTrade.price) / 1_000_000).toFixed(4)}
-              </span>
+        {/* ── Breadcrumb ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 24, fontSize: 13, color: '#888' }}>
+          <a href="/markets" style={{ color: '#888', textDecoration: 'none' }}>Markets</a>
+          <span>/</span>
+          <span style={{ color: '#0a0a0a', fontWeight: 600 }}>{asset.ticker}</span>
+        </div>
+
+        {/* ── Two-column layout ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 440px', gap: 32, alignItems: 'start' }}>
+
+          {/* LEFT — chart + info */}
+          <div>
+            {/* Token header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 24 }}>
+              {asset.logoUrl && (
+                <img
+                  src={asset.logoUrl}
+                  alt={asset.ticker}
+                  style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '1px solid #e5e7eb' }}
+                />
+              )}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em', margin: 0 }}>
+                    {asset.name}
+                  </h1>
+                  <span style={{
+                    fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
+                    background: '#f5f5f5', color: '#555',
+                  }}>
+                    {asset.ticker}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
+                    background: '#f0f0f0', color: '#777',
+                  }}>
+                    {CATEGORY_LABELS[asset.category] ?? asset.category}
+                  </span>
+                </div>
+
+                {/* Price */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 8 }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-0.04em' }}>
+                    ${currentPrice.toFixed(4)}
+                  </span>
+                  <span style={{
+                    fontSize: 14, fontWeight: 600,
+                    color: isPositive ? '#16a34a' : '#dc2626',
+                  }}>
+                    {isPositive ? '▲' : '▼'} {Math.abs(change24h).toFixed(2)}%
+                    <span style={{ fontWeight: 400, color: '#888', marginLeft: 4 }}>24h</span>
+                  </span>
+                  {priceIsLive && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      fontSize: 11, fontWeight: 600, color: '#16a34a',
+                      background: '#f0fdf4', padding: '3px 8px', borderRadius: 20,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
+                      Live pool price
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div style={{ marginBottom: 32 }}>
+              <PriceChart assetId={assetId} />
+            </div>
+
+            {/* ── About ── */}
+            <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 28 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>About {asset.name}</h2>
+              <p style={{ fontSize: 14, color: '#555', lineHeight: 1.7, marginBottom: 20 }}>
+                {asset.description}
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 32px' }}>
+                {asset.spvEntityName && (
+                  <Detail label="SPV Entity" value={asset.spvEntityName} />
+                )}
+                {asset.custodianName && (
+                  <Detail
+                    label="Custodian"
+                    value={`${asset.custodianName}${asset.custodianJurisdiction ? ` · ${asset.custodianJurisdiction}` : ''}`}
+                  />
+                )}
+                {asset.lockupDays > 0 && (
+                  <Detail label="Lock-up" value={`${asset.lockupDays} days`} />
+                )}
+                {asset.poolTokenAmount && (
+                  <Detail label="Pool Supply" value={`${(Number(asset.poolTokenAmount) / 1_000_000).toLocaleString()} ${asset.ticker}`} />
+                )}
+                {asset.listedAt && (
+                  <Detail label="Listed" value={new Date(asset.listedAt).toLocaleDateString()} />
+                )}
+                {asset.tinymanPoolAddress && (
+                  <Detail label="Pool" value={`${asset.tinymanPoolAddress.slice(0, 8)}…${asset.tinymanPoolAddress.slice(-4)}`} />
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* RIGHT — swap panel */}
+          <div style={{ position: 'sticky', top: 80 }}>
+            {asset.asaId ? (
+              <SwapPanel
+                assetId={asset.id}
+                asaId={asset.asaId}
+                asaDecimals={asset.decimals}
+                asaTicker={asset.ticker}
+                assetStatus={asset.status}
+              />
+            ) : (
+              <div style={{
+                background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 16,
+                padding: 24, textAlign: 'center', color: '#888', fontSize: 13,
+              }}>
+                Token not yet deployed on-chain.
+              </div>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Main trading layout */}
-      <div className="grid grid-cols-[1fr_280px_240px] gap-4">
-        {/* Chart */}
-        <div className="space-y-4">
-          <PriceChart assetId={assetId} />
-
-          {/* Open orders */}
-          <div className="bg-[#1A1D27] rounded-xl border border-[#2A2D3A]">
-            <div className="px-4 py-3 border-b border-[#2A2D3A]">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Open Orders</h3>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[#2A2D3A]">
-                  {['Side', 'Type', 'Price', 'Qty', 'Remaining', 'Status'].map((h) => (
-                    <th key={h} className="text-left px-4 py-2 text-gray-500 font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {myOrders?.filter((o) => ['ACCEPTED', 'PARTIALLY_FILLED'].includes(o.status))
-                  .map((order) => (
-                    <tr key={order.id} className="border-b border-[#2A2D3A]/50 hover:bg-white/[0.02]">
-                      <td className={`px-4 py-2 font-medium ${order.side === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
-                        {order.side}
-                      </td>
-                      <td className="px-4 py-2 text-gray-300">{order.orderType}</td>
-                      <td className="px-4 py-2 font-mono text-gray-300">
-                        {order.price ? `$${(Number(order.price) / 1_000_000).toFixed(4)}` : 'MKT'}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-gray-300">
-                        {(Number(order.quantity) / 1_000_000).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-gray-300">
-                        {(Number(order.remainingQuantity) / 1_000_000).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-2 text-yellow-400">{order.status.replace('_', ' ')}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Order book */}
-        <OrderBook
-          bids={snapshot?.bids ?? []}
-          asks={snapshot?.asks ?? []}
-          lastTrade={snapshot?.lastTrade}
-        />
-
-        {/* Order form + opt-in */}
-        <div className="space-y-4">
-          {activeAddress && asset?.asaId && (
-            <AssetOptIn asaId={asset.asaId} walletAddress={activeAddress} />
-          )}
-          <OrderForm
-            assetId={assetId}
-            asaId={asset?.asaId}
-            referencePriceUsdc={asset?.pricePerToken ?? asset?.referencePriceUsdc}
-            bestAskUsdc={snapshot?.asks?.[0]?.price}
-          />
-        </div>
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>
+        {label}
       </div>
+      <div style={{ fontSize: 14, fontWeight: 500, color: '#0a0a0a' }}>{value}</div>
     </div>
   );
 }
