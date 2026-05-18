@@ -27,13 +27,10 @@ export class InternalController {
     private readonly settlementService: SettlementService,
   ) {}
 
-  // ─── Called by Orderbook MatchingService when a trade is matched ──────────────
-
   @Post('settle')
   settle(@Body() payload: SettlePayload) {
     this.logger.log(`Settle request accepted for trade ${payload.tradeId} — processing async`);
-    // Fire-and-forget: settlement takes 30–40s (Algorand confirmation) which exceeds
-    // the matching service's HTTP timeout. Settlement notifies orderbook via HTTP callback.
+    // Fire-and-forget: settlement takes 30–40s (Algorand confirmation) which exceeds the caller's HTTP timeout.
     this.settlementService.processMatch({
       tradeId: payload.tradeId,
       buyOrderId: payload.buyOrderId,

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
 import algosdk from 'algosdk';
 
 interface PendingSignature {
@@ -11,33 +10,13 @@ interface PendingSignature {
   timer: NodeJS.Timeout;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SignatureCollectorService
-//
-// Manages the settlement signature collection flow via WebSocket relay.
-//
-// Flow:
-//   1. SettlementService calls requestSignatures()
-//   2. This service serializes the unsigned TX group and forwards it
-//      to the Orderbook Service's internal HTTP endpoint
-//   3. Orderbook Service relays via Socket.IO to the seller's browser
-//   4. Seller signs and sends back via Socket.IO → Orderbook → Settlement internal endpoint
-//   5. Settlement internal endpoint calls receiveSignature()
-//   6. Promise resolves with signed transactions
-//
-// Timeout: 30 seconds per signature request.
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Injectable()
 export class SignatureCollectorService {
   private readonly logger = new Logger(SignatureCollectorService.name);
   private readonly pending = new Map<string, PendingSignature>();
-  private readonly orderbookUrl: string;
-
   private readonly internalSecret: string;
 
   constructor() {
-    this.orderbookUrl = process.env.ORDERBOOK_SERVICE_URL ?? 'http://localhost:3003';
     this.internalSecret = process.env.INTERNAL_SECRET ?? '';
   }
 
@@ -65,13 +44,7 @@ export class SignatureCollectorService {
         timer,
       });
 
-      // Forward to Orderbook Service for WebSocket delivery
-      this.forwardToOrderbook(tradeId, unsignedTxnGroup, sellerWalletAddress).catch((err) => {
-        this.logger.error(`Failed to forward sign request: ${err.message}`);
-        clearTimeout(timer);
-        this.pending.delete(tradeId);
-        resolve(null);
-      });
+      this.logger.warn(`requestSignatures called for trade ${tradeId} — no relay target configured`);
     });
   }
 
@@ -99,24 +72,4 @@ export class SignatureCollectorService {
     }
   }
 
-  // ─── Forward sign request to Orderbook Service via HTTP ───────────────────────
-
-  private async forwardToOrderbook(
-    tradeId: string,
-    unsignedTxnGroup: algosdk.Transaction[],
-    sellerWalletAddress: string,
-  ): Promise<void> {
-    const unsignedB64 = unsignedTxnGroup.map((txn) =>
-      Buffer.from(txn.toByte()).toString('base64'),
-    );
-
-    await axios.post(`${this.orderbookUrl}/internal/settlement/forward-sign-request`, {
-      tradeId,
-      sellerWalletAddress,
-      unsignedTxnGroup: unsignedB64,
-      expiresAt: Date.now() + 30000,
-    }, { headers: { 'x-internal-secret': this.internalSecret } });
-
-    this.logger.debug(`Forwarded sign request to orderbook for trade ${tradeId}`);
-  }
 }

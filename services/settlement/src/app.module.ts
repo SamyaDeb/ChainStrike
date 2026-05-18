@@ -18,7 +18,6 @@ import { KafkaProducerModule } from './kafka/kafka-producer.module';
         ALGORAND_ADMIN_MNEMONIC: Joi.string().required(),
         ESCROW_CONTRACT_APP_ID: Joi.string().required(),
         TREASURY_WALLET_ADDRESS: Joi.string().required(),
-        ORDERBOOK_SERVICE_URL: Joi.string().default('http://localhost:3003'),
       }).options({ allowUnknown: true }),
     }),
     ScheduleModule.forRoot(),
