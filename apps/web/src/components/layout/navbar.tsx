@@ -1,75 +1,86 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { useWallet } from '@txnlab/use-wallet-react';
-import { logout, isAuthenticated } from '@/lib/auth';
-import { useEffect, useState } from 'react';
+import { useAuth } from '@/providers/auth-provider';
+import styles from './navbar.module.css';
 
 export function Navbar() {
   const { activeAddress, wallets, activeWallet } = useWallet();
-  const [authed, setAuthed] = useState(false);
+  const { user, signOut } = useAuth();
+  const authed = !!user;
+  const pathname = usePathname();
 
-  useEffect(() => {
-    setAuthed(isAuthenticated());
-  }, []);
-
-  const shortAddress = activeAddress
-    ? `${activeAddress.slice(0, 4)}…${activeAddress.slice(-4)}`
-    : null;
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   return (
-    <header className="h-14 bg-[#1A1D27] border-b border-[#2A2D3A] flex items-center px-6 gap-6">
-      <Link href="/" className="font-bold text-white">
-        Chain<span className="text-blue-500">Strike</span>
+    <header className={styles.nav}>
+      {/* Logo */}
+      <Link href="/" className={styles.logo}>
+        <span className={styles.logoImgWrap}>
+          <Image src="/logo.png" alt="ChainStrike" width={56} height={56} className={styles.logoImg} />
+        </span>
+        <span className={styles.logoText}>ChainStrike</span>
       </Link>
 
-      <nav className="flex items-center gap-4 text-sm text-gray-400">
-        <Link href="/markets" className="hover:text-white transition-colors">Markets</Link>
-        <Link href="/portfolio" className="hover:text-white transition-colors">Portfolio</Link>
-        <Link href="/kyc" className="hover:text-white transition-colors">KYC</Link>
+      {/* Nav links */}
+      <nav className={styles.links}>
+        <Link href="/markets" className={`${styles.link} ${isActive('/markets') ? styles.linkActive : ''}`}>Markets</Link>
+        <Link href="/liquidity" className={`${styles.link} ${isActive('/liquidity') ? styles.linkActive : ''}`}>Liquidity</Link>
+        <Link href="/portfolio" className={`${styles.link} ${isActive('/portfolio') ? styles.linkActive : ''}`}>Portfolio</Link>
       </nav>
 
-      <div className="ml-auto flex items-center gap-3">
-        {/* Wallet connection */}
-        {activeAddress ? (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span className="text-sm font-mono text-gray-300">{shortAddress}</span>
-            <button
-              onClick={() => activeWallet?.disconnect()}
-              className="text-xs text-gray-500 hover:text-white transition-colors"
-            >
-              Disconnect
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            {wallets?.map((wallet) => (
-              <button
-                key={wallet.id}
-                onClick={() => wallet.connect()}
-                className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                {wallet.metadata.name}
-              </button>
-            ))}
-          </div>
+      {/* Search */}
+      <div className={styles.search}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="#9a9a9a" strokeWidth="2" />
+          <path d="m20 20-3.2-3.2" stroke="#9a9a9a" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <input className={styles.searchInput} type="text" placeholder="Search assets, markets…" />
+      </div>
+
+      {/* Right actions */}
+      <div className={styles.actions}>
+        {/* Profile (investor context) */}
+        {authed && (
+          <Link href="/profile" className={styles.iconBtn} aria-label="Profile">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </Link>
         )}
 
-        {/* Account auth */}
-        {authed ? (
+        {/* Wallet */}
+        {activeAddress ? (
+          <button className={styles.btnWallet} onClick={() => activeWallet?.disconnect()}>
+            Disconnect
+          </button>
+        ) : (
           <button
-            onClick={logout}
-            className="text-xs text-gray-500 hover:text-white transition-colors border border-[#2A2D3A] px-3 py-1.5 rounded-lg"
+            className={styles.btnWallet}
+            onClick={() => {
+              const first = wallets?.[0];
+              if (first) first.connect();
+            }}
           >
+            Connect
+          </button>
+        )}
+
+        {/* Auth */}
+        {authed ? (
+          <button className={styles.btnPrimary} onClick={() => signOut()}>
             Sign out
           </button>
         ) : (
           <Link
-            href="/login"
-            className="text-xs px-3 py-1.5 border border-[#2A2D3A] text-gray-300 hover:text-white hover:border-gray-500 rounded-lg transition-colors"
+            href={`/login?redirect=${encodeURIComponent(pathname)}&intent=investor`}
+            className={styles.btnPrimary}
           >
-            Sign in
+            Sign in / Sign up
           </Link>
         )}
       </div>

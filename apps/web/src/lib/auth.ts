@@ -5,7 +5,8 @@ export interface User {
   email: string;
   role: string;
   kycTier: number;
-  fullName?: string;
+  fullName?: string | null;
+  createdAt?: string | null;
 }
 
 function decodeToken(token: string): User {
@@ -20,13 +21,54 @@ export async function login(email: string, password: string): Promise<User> {
   return decodeToken(data.accessToken);
 }
 
-export async function register(email: string, password: string, walletAddress?: string): Promise<void> {
+export type AccountRole = 'investor' | 'issuer';
+
+export async function register(
+  email: string,
+  password: string,
+  walletAddress?: string,
+  role: AccountRole = 'investor',
+  fullName?: string,
+): Promise<void> {
   await api.post('/auth/register', {
     email,
     password,
-    role: 'investor',
+    role,
     ...(walletAddress ? { walletAddress } : {}),
+    ...(fullName ? { fullName } : {}),
   });
+}
+
+export async function refreshSession(): Promise<User> {
+  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+  if (!refreshToken) throw new Error('No refresh token');
+  const { data } = await api.post('/auth/refresh', { refreshToken });
+  localStorage.setItem('access_token', data.accessToken);
+  localStorage.setItem('refresh_token', data.refreshToken);
+  return decodeToken(data.accessToken);
+}
+
+export async function fetchMe(): Promise<User> {
+  const { data } = await api.get('/users/me');
+  return {
+    id: data.id,
+    email: data.email,
+    role: data.role,
+    kycTier: data.kycProfile?.tier ?? data.kycTier ?? 0,
+    fullName: data.fullName,
+    createdAt: data.createdAt ?? null,
+  };
+}
+
+export function canIssue(user: User | null): boolean {
+  if (!user) return false;
+  const adminRoles = ['admin', 'ADMIN', 'compliance_officer', 'COMPLIANCE_OFFICER'];
+  return !adminRoles.includes(user.role);
+}
+
+export function isAdmin(user: User | null): boolean {
+  if (!user) return false;
+  return ['admin', 'ADMIN', 'compliance_officer', 'COMPLIANCE_OFFICER'].includes(user.role);
 }
 
 export async function walletChallenge(address: string): Promise<{ nonce: string; expiresAt: number }> {

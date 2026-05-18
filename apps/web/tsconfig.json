@@ -18,6 +18,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "algosdk-v2": [
+        "../../node_modules/@tinymanorg/tinyman-js-sdk/node_modules/algosdk"
       ]
     },
     "allowJs": true,

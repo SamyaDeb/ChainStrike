@@ -1,3 +1,18 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Tinyman SDK v4 is built against algosdk v2 and decodes pool/account state
+// assuming the v2 `.do()` response shape. The repo's root algosdk is v3, whose
+// responses break Tinyman's decoders ("Cannot read properties of undefined").
+// Point `algosdk-v2` at the algosdk v2 bundled inside the Tinyman SDK so the
+// swap path constructs a client matching what Tinyman expects.
+const ALGOSDK_V2 = path.resolve(
+  __dirname,
+  '../../node_modules/@tinymanorg/tinyman-js-sdk/node_modules/algosdk',
+);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -9,6 +24,7 @@ const nextConfig = {
     config.resolve.alias['@web3auth/base'] = false;
     config.resolve.alias['@web3auth/base-provider'] = false;
     config.resolve.alias['@web3auth/single-factor-auth'] = false;
+    config.resolve.alias['algosdk-v2'] = ALGOSDK_V2;
     return config;
   },
   env: {
