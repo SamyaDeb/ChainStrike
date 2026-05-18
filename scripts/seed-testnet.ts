@@ -15,7 +15,6 @@ import path from 'path';
 import algosdk from 'algosdk';
 import { PrismaClient as IdentityPrismaClient } from '../node_modules/.prisma/identity-client/index.js';
 import { PrismaClient as AssetPrismaClient } from '../node_modules/.prisma/asset-client/index.js';
-import { PrismaClient as OrderbookPrismaClient } from '../node_modules/.prisma/orderbook-client/index.js';
 import { PrismaClient as CompliancePrismaClient } from '../node_modules/.prisma/compliance-client/index.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -105,9 +104,6 @@ async function main() {
   });
   const assetDb = new AssetPrismaClient({
     datasources: { db: { url: process.env.ASSET_DATABASE_URL } },
-  });
-  const orderbookDb = new OrderbookPrismaClient({
-    datasources: { db: { url: process.env.ORDERBOOK_DATABASE_URL } },
   });
   const complianceDb = new CompliancePrismaClient({
     datasources: { db: { url: process.env.COMPLIANCE_DATABASE_URL } },
@@ -240,24 +236,6 @@ async function main() {
       console.log(`      Asset ${TEST_ASSET.ticker} already exists`);
     }
 
-    // Seed market
-    const existingMarket = await orderbookDb.market.findFirst({ where: { assetId: asset.id } });
-    let market = existingMarket;
-    if (!existingMarket) {
-      market = await orderbookDb.market.create({
-        data: {
-          assetId: asset.id,
-          asaId,
-          ticker: TEST_ASSET.ticker,
-          status: 'ACTIVE',
-          referencePriceUsdc: BigInt(10_000_000), // 10.00 USDC
-          lastTradedPrice: BigInt(10_000_000),
-          openedAt: new Date(),
-        },
-      });
-      console.log('      Market opened');
-    }
-
     // Seed oracle price
     const existingPrice = await assetDb.oraclePrice.findFirst({ where: { asaId } });
     if (!existingPrice) {
@@ -294,56 +272,7 @@ async function main() {
     }
 
     console.log('\n[4/5] Database seeded successfully\n');
-
-    // ─── Seed initial orders ──────────────────────────────────────────────────
-    console.log('[5/5] Placing initial orders…');
-
-    // Admin places a sell order (initial liquidity)
-    // For testnet, we'll skip the actual order placement via API and insert directly
-    // This avoids needing all services to be running
-    if (!market) {
-      throw new Error('Market not found after seed step');
-    }
-
-    const existingOrders = await orderbookDb.order.findMany({ where: { marketId: market.id } });
-    if (existingOrders.length === 0) {
-      await orderbookDb.order.create({
-        data: {
-          marketId: market.id,
-          userId: issuer.id,
-          walletAddress: adminAccount.addr.toString(),
-          side: 'SELL',
-          type: 'LIMIT',
-          timeInForce: 'GTC',
-          price: BigInt(10_500_000), // 10.50 USDC
-          quantity: BigInt(100_000_000), // 100 tokens
-          remainingQuantity: BigInt(100_000_000),
-          filledQuantity: BigInt(0),
-          status: 'ACCEPTED',
-        },
-      });
-      console.log('      Sell order: 100 XGLD @ 10.50 USDC');
-
-      await orderbookDb.order.create({
-        data: {
-          marketId: market.id,
-          userId: investor.id,
-          walletAddress: adminAccount.addr.toString(),
-          side: 'BUY',
-          type: 'LIMIT',
-          timeInForce: 'GTC',
-          price: BigInt(9_800_000), // 9.80 USDC
-          quantity: BigInt(50_000_000), // 50 tokens
-          remainingQuantity: BigInt(50_000_000),
-          filledQuantity: BigInt(0),
-          status: 'ACCEPTED',
-        },
-      });
-      console.log('      Buy order: 50 XGLD @ 9.80 USDC');
-    } else {
-      console.log('      Orders already exist');
-    }
-
+    console.log('[5/5] Pool liquidity is seeded on-chain via activateMarket — no manual orders needed\n');
     console.log('\nDone!\n');
     console.log('Testnet is ready for testing:');
     console.log(`  Admin:    admin@testnet.io / Admin@Test2024!`);
@@ -355,7 +284,6 @@ async function main() {
   } finally {
     await identityDb.$disconnect();
     await assetDb.$disconnect();
-    await orderbookDb.$disconnect();
     await complianceDb.$disconnect();
   }
 }

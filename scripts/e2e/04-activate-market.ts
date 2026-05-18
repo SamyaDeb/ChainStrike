@@ -86,54 +86,6 @@ async function verifyMarketplaceListsAsset(assetId: string, ticker: string) {
   ok(`Asset appears in marketplace: ${found?.ticker ?? ticker}`);
 }
 
-async function verifyOrderbookMarketIsActive(assetId: string) {
-  log('Verifying orderbook market status is ACTIVE…');
-  // Depth endpoint continues to work; we confirm asks are still visible
-  const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/depth?levels=20`);
-  const asks = data.asks ?? [];
-  ok(`Orderbook depth after activation: ${asks.length} asks, ${(data.bids ?? []).length} bids`);
-}
-
-async function verifyBuyOrderNowPossible(token: string, assetId: string, walletAddress: string) {
-  log('Verifying BUY orders are now accepted (market is ACTIVE)…');
-  // Try placing a BUY order — should succeed (DEV_SKIP_USDC_PAYMENT=true, DEV_SKIP_COMPLIANCE=true)
-  try {
-    const state = loadState();
-    const { data: assetData } = await axios.get(`${GATEWAY}/assets/${assetId}`);
-    const refPrice = assetData.pricePerToken ?? '25000000';
-
-    const { data } = await axios.post(
-      `${GATEWAY}/orders`,
-      {
-        assetId,
-        side: 'BUY',
-        orderType: 'LIMIT',
-        timeInForce: 'GTC',
-        price: refPrice,
-        quantity: '1000000', // 1 token (micro)
-        walletAddress,
-      },
-      { ...authHeader(token), timeout: 180_000 },
-    );
-    if (data.id) {
-      ok(`BUY order accepted: orderId=${data.id}, status=${data.status}`);
-      saveState({ testBuyOrderId: data.id });
-    } else {
-      log(`  ⚠️  Order response: ${JSON.stringify(data)}`);
-    }
-  } catch (err: any) {
-    const body = err.response?.data;
-    // If compliance blocks it, that's expected — we check market is ACTIVE
-    if (body?.message?.includes('COMPLIANCE') || body?.message?.includes('whitelist')) {
-      log(`  ⚠️  Order blocked by compliance (expected in strict mode): ${body.message}`);
-    } else if (body?.message?.includes('PRE_MARKET') || body?.message?.includes('SUBMITTED')) {
-      fail(`Market not yet ACTIVE in orderbook service: ${body.message}`);
-    } else {
-      log(`  ⚠️  Order attempt: ${body?.message ?? err.message}`);
-    }
-  }
-}
-
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════╗');
   console.log('║   ChainStrike E2E — 04: Activate Market           ║');
@@ -156,25 +108,8 @@ async function main() {
 
   await verifyAssetIsActive(assetId);
   await verifyMarketplaceListsAsset(assetId, ticker ?? '');
-  await verifyOrderbookMarketIsActive(assetId);
 
-  // Get investor token for buy order test
-  log('Logging in as investor for market-open validation…');
-  const { data: investorAuth } = await axios.post(`${GATEWAY}/auth/login`, {
-    email: 'investor@testnet.io',
-    password: 'Investor@Test2024!',
-  });
-  const investorToken = investorAuth.accessToken;
-  const investorPayload = JSON.parse(Buffer.from(investorToken.split('.')[1], 'base64').toString());
-  ok(`Investor logged in: ${investorPayload.email}`);
-
-  // Use admin wallet address as investor wallet for dev testing
-  const { issuerWalletAddress } = state;
-  if (issuerWalletAddress) {
-    await verifyBuyOrderNowPossible(investorToken, assetId, issuerWalletAddress);
-  }
-
-  saveState({ adminToken, investorToken });
+  saveState({ adminToken });
 
   console.log(`\n✅ TEST 04 PASSED — Market is LIVE and ACTIVE`);
   console.log(`   Investors can now trade ${ticker ?? assetId}\n`);

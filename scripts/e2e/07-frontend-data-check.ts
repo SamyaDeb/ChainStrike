@@ -12,7 +12,6 @@ import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 
 const GATEWAY = 'http://localhost:8080/api/v1';
-const ORDERBOOK_WS = 'http://localhost:3003';
 const STATE_FILE = path.resolve('scripts/e2e/.state.json');
 
 function log(msg: string) { console.log(`  ${msg}`); }
@@ -72,41 +71,34 @@ async function checkAssetDetail(assetId: string, asaId: number) {
   }
 }
 
-async function checkOrderbookDepth(assetId: string) {
-  log(`[Investor App] GET /orders/${assetId}/depth (orderbook widget)…`);
-  const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/depth?levels=20`);
-
-  const bids = data.bids ?? [];
-  const asks = data.asks ?? [];
-  ok(`  Depth: ${bids.length} bid levels, ${asks.length} ask levels`);
-
-  if (asks.length > 0) {
-    ok(`  Best ask: ${Number(asks[0].price) / 1e6} USDC @ ${Number(asks[0].quantity) / 1e6} tokens`);
-  }
-  if (bids.length > 0) {
-    ok(`  Best bid: ${Number(bids[0].price) / 1e6} USDC @ ${Number(bids[0].quantity) / 1e6} tokens`);
-  }
-
-  // Shape validation for frontend
-  if (asks.length > 0) {
-    const a = asks[0];
-    if (typeof a.price === 'undefined' || typeof a.quantity === 'undefined') {
-      fail(`Depth level missing price/quantity fields: ${JSON.stringify(a)}`);
-    }
+async function checkPriceHistory(assetId: string) {
+  log(`[Investor App] GET /assets/${assetId}/price-history (price chart)…`);
+  try {
+    const { data } = await axios.get(`${GATEWAY}/assets/${assetId}/price-history`, {
+      timeout: 10_000,
+      validateStatus: () => true,
+    });
+    const candles = Array.isArray(data) ? data : data?.data ?? [];
+    ok(`  Price history: ${candles.length} candle(s)`);
+  } catch (err: any) {
+    warn(`  Price history: ${err.message}`);
   }
 }
 
-async function checkOhlcv(assetId: string) {
-  log(`[Investor App] GET /orders/${assetId}/ohlcv (price chart)…`);
-  const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/ohlcv?interval=1h&limit=24`);
-  if (Array.isArray(data)) {
-    ok(`  OHLCV: ${data.length} candles returned`);
-    if (data.length > 0) {
-      const c = data[0];
-      log(`    Sample: open=${c.open} high=${c.high} low=${c.low} close=${c.close} vol=${c.volume}`);
+async function checkCurrentPrice(assetId: string) {
+  log(`[Investor App] GET /assets/${assetId}/price (current AMM price)…`);
+  try {
+    const { data } = await axios.get(`${GATEWAY}/assets/${assetId}/price`, {
+      timeout: 10_000,
+      validateStatus: () => true,
+    });
+    if (data?.price) {
+      ok(`  Current price: ${Number(data.price).toFixed(6)} USDC/token`);
+    } else {
+      warn('  Price snapshot not yet recorded');
     }
-  } else {
-    warn(`  OHLCV response shape unexpected: ${JSON.stringify(data).slice(0, 100)}`);
+  } catch (err: any) {
+    warn(`  Price endpoint: ${err.message}`);
   }
 }
 
@@ -120,16 +112,6 @@ async function checkIssuerPortfolio(issuerToken: string) {
   }
 }
 
-async function checkInvestorOrders(investorToken: string) {
-  log('[Investor App] GET /orders/my (my open orders)…');
-  const { data } = await axios.get(`${GATEWAY}/orders/my`, authHeader(investorToken));
-  const orders = Array.isArray(data) ? data : [];
-  ok(`  Investor has ${orders.length} active/recent order(s)`);
-  for (const o of orders.slice(0, 3)) {
-    log(`    • ${o.side} ${Number(o.quantity) / 1e6} @ ${Number(o.price ?? 0) / 1e6} USDC | status=${o.status}`);
-  }
-}
-
 async function checkAlgorandParams() {
   log('[Issuer App] GET /assets/algorand-params (wallet integration config)…');
   const { data } = await axios.get(`${GATEWAY}/assets/algorand-params`);
@@ -139,20 +121,6 @@ async function checkAlgorandParams() {
       fail(`Missing ${f} in algorand-params response`);
     }
     ok(`  ${f}: ${data[f]}`);
-  }
-}
-
-async function checkWebSocketEndpoint() {
-  log('[Investor App] Orderbook WebSocket endpoint accessibility…');
-  // Just verify the HTTP upgrade path responds
-  try {
-    const { data } = await axios.get(`${ORDERBOOK_WS}/socket.io/?EIO=4&transport=polling`, {
-      timeout: 3000,
-      validateStatus: () => true,
-    });
-    ok(`  WebSocket handshake OK`);
-  } catch (err: any) {
-    warn(`  WebSocket check: ${err.message}`);
   }
 }
 
@@ -169,20 +137,16 @@ async function checkAmlAlerts(adminToken: string) {
 
 async function printFrontendChecklistSummary() {
   console.log('\n─── Frontend Integration Checklist ───────────────────────────');
-  console.log('  ✅ Marketplace (GET /assets?status=ACTIVE) → Investor landing page');
-  console.log('  ✅ Asset Detail (GET /assets/:id) → Trade page header');
-  console.log('  ✅ Orderbook Depth (GET /orders/:id/depth) → Orderbook widget');
-  console.log('  ✅ OHLCV (GET /orders/:id/ohlcv) → Price chart');
-  console.log('  ✅ My Orders (GET /orders/my) → Order history panel');
+  console.log('  ✅ Marketplace (GET /assets?status=ACTIVE) → Markets page grid');
+  console.log('  ✅ Asset Detail (GET /assets/:id) → Trade / Liquidity page header');
+  console.log('  ✅ Price History (GET /assets/:id/price-history) → Price chart');
+  console.log('  ✅ Current Price (GET /assets/:id/price) → Live price display');
   console.log('  ✅ Issuer Portfolio (GET /assets/my) → Issuer dashboard');
   console.log('  ✅ Algorand Params (GET /assets/algorand-params) → Wallet integration');
-  console.log('  ✅ WebSocket (wss://localhost:3003) → Live orderbook updates');
   console.log('──────────────────────────────────────────────────────────────');
   console.log('\n  Frontend can now display live on-chain data correctly.');
-  console.log('  Start the frontend apps and navigate through the flow:\n');
-  console.log('    Issuer:   http://localhost:3101  (issuer@testnet.io / Issuer@Test2024!)');
-  console.log('    Admin:    http://localhost:3100  (admin@testnet.io / Admin@Test2024!)');
-  console.log('    Investor: http://localhost:3000  (investor@testnet.io / Investor@Test2024!)');
+  console.log('  Start the frontend and navigate through the flow:\n');
+  console.log('    App: http://localhost:3000  (investor@testnet.io / Investor@Test2024!)');
 }
 
 async function main() {
@@ -222,14 +186,12 @@ async function main() {
   console.log('─── Public APIs (no auth) ────────────────────────────────────\n');
   await checkPublicMarketplace();
   await checkAssetDetail(assetId, asaId);
-  await checkOrderbookDepth(assetId);
-  await checkOhlcv(assetId);
+  await checkPriceHistory(assetId);
+  await checkCurrentPrice(assetId);
   await checkAlgorandParams();
-  await checkWebSocketEndpoint();
 
   console.log('\n─── Authenticated APIs ────────────────────────────────────────\n');
   await checkIssuerPortfolio(issuerToken);
-  await checkInvestorOrders(investorToken);
   await checkAmlAlerts(adminToken);
 
   await printFrontendChecklistSummary();

@@ -45,7 +45,7 @@ echo -e "${GREEN}  ✓ Dependencies installed${NC}"
 
 # ─── Step 2: Run Prisma migrations ────────────────────────────────────────────
 echo -e "\n${BLUE}[2/5] Running database migrations…${NC}"
-for service in identity asset compliance orderbook settlement; do
+for service in identity asset compliance settlement; do
   echo -n "  Migrating $service schema… "
   (cd "services/$service" && npx prisma migrate deploy --schema prisma/schema.prisma 2>/dev/null && echo -e "${GREEN}✓${NC}") || echo -e "${YELLOW}(skipped — no migrations found)${NC}"
 done

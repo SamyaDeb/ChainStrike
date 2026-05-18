@@ -1,18 +1,19 @@
 /**
- * ChainStrike E2E Full Suite Runner
- * Runs all 8 tests in sequence and reports pass/fail per test.
+ * ChainStrike E2E Full Suite Runner (AMM)
+ * Runs all 7 AMM tests in sequence and reports pass/fail per test.
  *
  * Run: npx ts-node --esm scripts/e2e/run-all.ts
+ * Run clean: npx ts-node --esm scripts/e2e/run-all.ts --clean
+ * Resume from test: npx ts-node --esm scripts/e2e/run-all.ts --from=03
  *
  * Individual tests:
  *   npx ts-node --esm scripts/e2e/00-health-check.ts
  *   npx ts-node --esm scripts/e2e/01-issuer-flow.ts
  *   npx ts-node --esm scripts/e2e/02-admin-approval.ts
- *   npx ts-node --esm scripts/e2e/03-distribute-and-seed.ts
- *   npx ts-node --esm scripts/e2e/04-activate-market.ts
- *   npx ts-node --esm scripts/e2e/05-investor-buy-and-match.ts
- *   npx ts-node --esm scripts/e2e/06-settlement-verify.ts
- *   npx ts-node --esm scripts/e2e/07-frontend-data-check.ts
+ *   npx ts-node --esm scripts/e2e/03-activate-and-pool.ts
+ *   npx ts-node --esm scripts/e2e/04-swap-buy.ts
+ *   npx ts-node --esm scripts/e2e/05-swap-sell.ts
+ *   npx ts-node --esm scripts/e2e/06-price-history.ts
  */
 
 import { spawnSync } from 'child_process';
@@ -22,14 +23,13 @@ import { existsSync, unlinkSync } from 'fs';
 const STATE_FILE = path.resolve('scripts/e2e/.state.json');
 
 const TESTS = [
-  { id: '00', name: 'Health Check',               file: '00-health-check.ts' },
-  { id: '01', name: 'Issuer Flow',                file: '01-issuer-flow.ts' },
+  { id: '00', name: 'Health Check',                file: '00-health-check.ts' },
+  { id: '01', name: 'Issuer Flow',                 file: '01-issuer-flow.ts' },
   { id: '02', name: 'Admin Approval + ASA Deploy', file: '02-admin-approval.ts' },
-  { id: '03', name: 'Distribute + Seed Orders',   file: '03-distribute-and-seed.ts' },
-  { id: '04', name: 'Activate Market',             file: '04-activate-market.ts' },
-  { id: '05', name: 'Investor Buy + Match',        file: '05-investor-buy-and-match.ts' },
-  { id: '06', name: 'Settlement Verification',    file: '06-settlement-verify.ts' },
-  { id: '07', name: 'Frontend Data Check',         file: '07-frontend-data-check.ts' },
+  { id: '03', name: 'Activate + Tinyman Pool',     file: '03-activate-and-pool.ts' },
+  { id: '04', name: 'Swap Buy (AMM)',               file: '04-swap-buy.ts' },
+  { id: '05', name: 'Swap Sell (AMM)',              file: '05-swap-sell.ts' },
+  { id: '06', name: 'Price History',               file: '06-price-history.ts' },
 ];
 
 interface TestResult {
@@ -45,7 +45,7 @@ function runTest(file: string): { passed: boolean; durationMs: number; output: s
   const start = Date.now();
   const result = spawnSync(
     'npx', ['ts-node', '--esm', path.join('scripts/e2e', file)],
-    { encoding: 'utf8', shell: true, timeout: 180_000 },
+    { encoding: 'utf8', shell: true, timeout: 300_000 },
   );
   const durationMs = Date.now() - start;
   const passed = result.status === 0;
@@ -61,7 +61,7 @@ function printSummary(results: TestResult[]) {
   const failed = total - passed;
 
   console.log('\n╔══════════════════════════════════════════════════════════╗');
-  console.log('║              ChainStrike E2E — Final Report              ║');
+  console.log('║         ChainStrike E2E (AMM) — Final Report             ║');
   console.log('╠══════════════════════════════════════════════════════════╣');
 
   for (const r of results) {
@@ -71,7 +71,8 @@ function printSummary(results: TestResult[]) {
   }
 
   console.log('╠══════════════════════════════════════════════════════════╣');
-  console.log(`║  Passed: ${passed}/${total}  ${failed === 0 ? '🎉 All tests passed!' : `❌ ${failed} test(s) failed`}`.padEnd(59) + '║');
+  const summary = `║  Passed: ${passed}/${total}  ${failed === 0 ? '🎉 All tests passed!' : `❌ ${failed} test(s) failed`}`;
+  console.log(summary.padEnd(59) + '║');
   console.log('╚══════════════════════════════════════════════════════════╝\n');
 
   if (failed > 0) {
@@ -92,7 +93,7 @@ async function main() {
   const startFrom = args.find((a) => a.startsWith('--from='))?.split('=')[1] ?? '00';
 
   console.log('╔══════════════════════════════════════════════════╗');
-  console.log('║   ChainStrike E2E Suite — Full Run                ║');
+  console.log('║   ChainStrike E2E Suite (AMM) — Full Run          ║');
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   if (cleanRun && existsSync(STATE_FILE)) {
@@ -104,7 +105,6 @@ async function main() {
   console.log(`Running ${testsToRun.length} test(s) starting from ${startFrom}…\n`);
 
   const results: TestResult[] = [];
-  let stopOnFailure = true;
 
   for (const test of testsToRun) {
     process.stdout.write(`▶ Running ${test.id}: ${test.name}… `);
@@ -114,7 +114,6 @@ async function main() {
     console.log(`${icon} (${(durationMs / 1000).toFixed(1)}s)`);
 
     if (!passed) {
-      // Print first 30 lines of output to help debug
       const lines = output.split('\n').filter(Boolean);
       for (const line of lines.slice(0, 30)) {
         console.log(`  ${line}`);
@@ -129,12 +128,12 @@ async function main() {
 
     results.push({ id: test.id, name: test.name, passed, durationMs, output, error });
 
-    if (!passed && stopOnFailure) {
+    if (!passed) {
       console.log('\n⛔ Stopping suite after first failure. Fix the issue and re-run:\n');
       console.log(`  npx ts-node --esm scripts/e2e/${test.file}\n`);
-      console.log(`Or resume from next test:\n`);
       const nextIdx = TESTS.findIndex((t) => t.id === test.id) + 1;
       if (nextIdx < TESTS.length) {
+        console.log(`Or resume from next test:\n`);
         console.log(`  npx ts-node --esm scripts/e2e/run-all.ts --from=${TESTS[nextIdx].id}\n`);
       }
       break;

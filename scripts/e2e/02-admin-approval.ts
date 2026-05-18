@@ -1,6 +1,7 @@
 /**
- * E2E Test 02 — Admin Approval Flow
- * Tests: admin reviews all 5 stages → approves asset → deploys ASA on-chain
+ * E2E Test 02 — Admin Approval Flow (AMM)
+ * Tests: admin reviews all 5 verification stages → approves → deploys ASA on-chain.
+ * Verifies: poolTokenAmount set, asaId set, status=PRE_MARKET.
  *
  * Run: npx ts-node --esm scripts/e2e/02-admin-approval.ts
  * Requires: 01-issuer-flow to have run first (reads .state.json)
@@ -10,7 +11,6 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import axios from 'axios';
-import algosdk from 'algosdk';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 
@@ -19,7 +19,7 @@ const STATE_FILE = path.resolve('scripts/e2e/.state.json');
 
 function log(msg: string) { console.log(`  ${msg}`); }
 function ok(msg: string) { console.log(`  ✅ ${msg}`); }
-function fail(msg: string) { console.error(`  ❌ ${msg}`); throw new Error(msg); }
+function fail(msg: string): never { console.error(`  ❌ ${msg}`); throw new Error(msg); }
 
 function loadState(): Record<string, any> {
   if (!existsSync(STATE_FILE)) fail('State file not found — run 01-issuer-flow.ts first');
@@ -36,7 +36,6 @@ function authHeader(token: string) {
 }
 
 async function ensureAdminToken(state: Record<string, any>): Promise<string> {
-  // Try reusing stored token; re-login if expired
   if (state.adminToken) {
     try {
       const payload = JSON.parse(Buffer.from(state.adminToken.split('.')[1], 'base64').toString());
@@ -111,115 +110,36 @@ async function deployAsa(token: string, assetId: string): Promise<number> {
   return data.asaId;
 }
 
-async function verifyAssetIsPreMarket(assetId: string, asaId: number) {
-  log('Verifying asset transitioned to PRE_MARKET with real asaId…');
+async function verifyAssetIsPreMarket(assetId: string, asaId: number): Promise<any> {
+  log('Verifying asset transitioned to PRE_MARKET with asaId and poolTokenAmount set…');
   const { data } = await axios.get(`${GATEWAY}/assets/${assetId}`);
+
   if (data.status !== 'PRE_MARKET') {
     fail(`Expected status=PRE_MARKET, got: ${data.status}`);
   }
+  ok(`Asset status: PRE_MARKET`);
+
   if (data.asaId !== asaId) {
     fail(`asaId mismatch: expected ${asaId}, got ${data.asaId}`);
   }
-  ok(`Asset is PRE_MARKET with asaId=${data.asaId}`);
+  ok(`asaId confirmed: ${data.asaId}`);
 
-  // Check on-chain enrichment
+  // Verify poolTokenAmount is derived and set by the server
+  if (!data.poolTokenAmount || data.poolTokenAmount === '0' || data.poolTokenAmount === 0) {
+    fail(`poolTokenAmount not set or is 0 — server should derive this from liquidityDepositUsdc / pricePerToken`);
+  }
+  ok(`poolTokenAmount: ${data.poolTokenAmount} base units (${Number(data.poolTokenAmount) / 1_000_000} tokens)`);
+
+  // Verify on-chain ASA flags
   if (data.onChain) {
-    ok(`On-chain data: creator=${data.onChain.creator?.slice(0, 16)}… defaultFrozen=${data.onChain.defaultFrozen}`);
+    ok(`On-chain data: creator=${String(data.onChain.creator ?? '').slice(0, 16)}… defaultFrozen=${data.onChain.defaultFrozen}`);
     if (!data.onChain.defaultFrozen) {
       fail('CRITICAL: ASA defaultFrozen must be true for RWA compliance!');
     }
-  }
-}
-
-async function verifyOrderbookMarketCreated(assetId: string) {
-  log('Verifying orderbook market was created for this asset…');
-  const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/depth`);
-  if (data.bids === undefined && data.asks === undefined) {
-    fail(`Orderbook depth endpoint returned unexpected shape: ${JSON.stringify(data)}`);
-  }
-  ok(`Orderbook market exists for asset ${assetId} (bids=${data.bids?.length ?? 0}, asks=${data.asks?.length ?? 0})`);
-}
-
-async function verifyEscrowReleasedToVault(assetId: string, vaultContractId: number) {
-  log('Verifying issuance escrow was released to vault on-chain…');
-
-  // 1. Check DB field
-  const { data: asset } = await axios.get(`${GATEWAY}/assets/${assetId}`);
-  if (asset.issuanceEscrowStatus !== 'RELEASED_TO_VAULT') {
-    fail(`Expected issuanceEscrowStatus=RELEASED_TO_VAULT, got: ${asset.issuanceEscrowStatus}`);
-  }
-  ok(`DB escrow status: RELEASED_TO_VAULT`);
-  ok(`Release txId: ${asset.issuanceEscrowReleaseTxId}`);
-  ok(`View: https://testnet.algoexplorer.io/tx/${asset.issuanceEscrowReleaseTxId}`);
-
-  // 2. Verify vault holds USDC on-chain via algod
-  const algodServer = process.env.ALGORAND_ALGOD_SERVER ?? 'https://testnet-api.algonode.cloud';
-  const algodPort = parseInt(process.env.ALGORAND_ALGOD_PORT ?? '443');
-  const algodToken = process.env.ALGORAND_ALGOD_TOKEN ?? '';
-  const algod = new algosdk.Algodv2(algodToken, algodServer, algodPort);
-  const usdcAsaId = 10458941;
-
-  const vaultAddress = algosdk.getApplicationAddress(vaultContractId).toString();
-  try {
-    const info = await algod.accountAssetInformation(vaultAddress, usdcAsaId).do();
-    const holding = info.assetHolding ?? (info as any)['asset-holding'];
-    const vaultUsdc = BigInt(holding?.amount ?? 0);
-    if (vaultUsdc === 0n) {
-      fail(`Vault USDC balance is 0 — escrow release may have failed on-chain`);
-    }
-    ok(`Vault USDC balance on-chain: ${Number(vaultUsdc) / 1_000_000} USDC (vault appId=${vaultContractId})`);
-  } catch (err: any) {
-    fail(`Failed to query vault USDC balance: ${err.message}`);
+    ok('ASA defaultFrozen=true — compliance OK');
   }
 
-  // 3. Verify escrow contract USDC is now 0
-  const issuanceEscrowAddress = process.env.ISSUANCE_ESCROW_ADDRESS ?? '';
-  if (issuanceEscrowAddress) {
-    try {
-      const escrowInfo = await algod.accountAssetInformation(issuanceEscrowAddress, usdcAsaId).do();
-      const escrowHolding = escrowInfo.assetHolding ?? (escrowInfo as any)['asset-holding'];
-      const escrowUsdc = BigInt(escrowHolding?.amount ?? 0);
-      ok(`Issuance escrow USDC balance after release: ${Number(escrowUsdc) / 1_000_000} USDC (should be 0 for this asset)`);
-    } catch {
-      ok('Escrow balance check skipped (opted out or zero)');
-    }
-  }
-}
-
-async function activateMarket(adminToken: string, assetId: string, asaId: number) {
-  console.log('\n[5] Activating market...');
-  const res = await axios.patch(`${GATEWAY}/assets/${assetId}/activate`, undefined, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    timeout: 180_000,
-  });
-  ok(`Market activated: status=${res.data.status}`);
-
-  // Verify issuer wallet received tokens on-chain
-  const freshAsset = await axios.get(`${GATEWAY}/assets/${assetId}`);
-  const issuerWallet = freshAsset.data.issuerWalletAddress;
-  const liquidityUsdc = BigInt(freshAsset.data.liquidityDepositUsdc ?? '0');
-  const pricePerToken = BigInt(freshAsset.data.pricePerToken ?? '0');
-
-  if (!issuerWallet) fail('issuerWalletAddress not set on asset — cannot verify token balance');
-  if (pricePerToken === 0n) fail('pricePerToken is 0 — cannot compute expected allocation');
-
-  const assetDecimals = BigInt(freshAsset.data.decimals ?? 6);
-  const expectedTokens = (liquidityUsdc / pricePerToken) * (10n ** assetDecimals);
-  log(`Expected issuer allocation: ${expectedTokens} tokens (${liquidityUsdc} µUSDC ÷ ${pricePerToken} µUSDC/token)`);
-
-  const algod = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', 443);
-  let balance = 0n;
-  try {
-    const info = await algod.accountAssetInformation(issuerWallet, asaId).do();
-    balance = BigInt((info as any)['asset-holding']?.amount ?? 0);
-  } catch {
-    fail(`Issuer wallet ${issuerWallet} has no holding for ASA ${asaId} — opt-in or distribution failed`);
-  }
-
-  if (balance < expectedTokens) {
-    fail(`Issuer wallet has ${balance} tokens but expected >= ${expectedTokens}`);
-  }
-  ok(`Issuer wallet ${issuerWallet} holds ${balance} tokens on-chain ✓`);
+  return data;
 }
 
 async function main() {
@@ -234,18 +154,20 @@ async function main() {
   const adminToken = await ensureAdminToken(state);
 
   await submitVerificationStages(adminToken, assetId);
-  const asset = await checkVerificationStatus(adminToken, assetId);
+  await checkVerificationStatus(adminToken, assetId);
   const asaId = await deployAsa(adminToken, assetId);
-  await verifyAssetIsPreMarket(assetId, asaId);
-  await verifyOrderbookMarketCreated(assetId);
-  // Note: escrow release + market activation happens in test 04 (activate-market)
-  // which also handles token distribution via the asset service's activateMarket endpoint
+  const assetData = await verifyAssetIsPreMarket(assetId, asaId);
 
-  saveState({ adminToken, asaId });
+  saveState({
+    adminToken,
+    asaId,
+    poolTokenAmount: assetData.poolTokenAmount?.toString(),
+  });
 
   console.log(`\n✅ TEST 02 PASSED — ASA deployed: asaId=${asaId}`);
   console.log(`   Algoexplorer: https://testnet.algoexplorer.io/asset/${asaId}`);
-  console.log(`   Asset is PRE_MARKET — run test 03 to distribute tokens, test 04 to activate\n`);
+  console.log(`   poolTokenAmount: ${assetData.poolTokenAmount}`);
+  console.log(`   Asset is PRE_MARKET — run test 03 to activate market and create Tinyman pool\n`);
 }
 
 main().catch((err) => {

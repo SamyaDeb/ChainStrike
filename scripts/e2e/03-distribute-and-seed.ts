@@ -1,7 +1,7 @@
 /**
- * E2E Test 03 — Distribute Tokens + Seed Sell Orders (Liquidity Injection)
- * Tests: admin distributes tokens to issuer wallet → issuer wallet seeds sell orders
- *        → sell orders visible in orderbook → issuer wallet still shows balance
+ * E2E Test 03 — Distribute Tokens + Verify Issuer Wallet
+ * Tests: admin distributes tokens to issuer wallet → issuer wallet balance confirmed
+ *        → issuer wallet is whitelisted in compliance
  *
  * Run: npx ts-node --esm scripts/e2e/03-distribute-and-seed.ts
  * Requires: 02-admin-approval to have run first
@@ -125,45 +125,6 @@ async function verifyIssuerWalletBalance(
   ok(`Issuer wallet balance verified: ${(Number(balance) / 1e6).toLocaleString()} tokens`);
 }
 
-async function seedSellOrders(
-  token: string,
-  assetId: string,
-  issuerWalletAddress: string,
-  seedQuantity: string,
-): Promise<string> {
-  log(`Seeding initial SELL orders: ${Number(seedQuantity) / 1e6} tokens @ configured price…`);
-
-  const { data } = await axios.post(
-    `${GATEWAY}/assets/${assetId}/seed-orders`,
-    { issuerWalletAddress, seedQuantity },
-    { ...authHeader(token), timeout: 15_000 },
-  );
-
-  if (!data.orderId && !data.seedQuantity) {
-    fail(`Seed orders returned unexpected response: ${JSON.stringify(data)}`);
-  }
-  const orderId = data.orderId ?? 'N/A';
-  ok(`Seed sell order created: orderId=${orderId}, qty=${Number(seedQuantity) / 1e6}`);
-  return orderId;
-}
-
-async function verifyOrderbookDepth(assetId: string, expectedAskLevels: number) {
-  log(`Verifying orderbook depth has at least ${expectedAskLevels} ask level(s)…`);
-  const { data } = await axios.get(`${GATEWAY}/orders/${assetId}/depth?levels=20`);
-
-  const asks = data.asks ?? [];
-  const bids = data.bids ?? [];
-
-  if (asks.length < expectedAskLevels) {
-    fail(`Expected ${expectedAskLevels} ask level(s), got: ${asks.length}. Full depth: ${JSON.stringify(data)}`);
-  }
-
-  ok(`Orderbook depth: ${bids.length} bid levels, ${asks.length} ask levels`);
-  if (asks.length > 0) {
-    ok(`Best ask: ${asks[0].price} USDC (micro) × ${asks[0].quantity} tokens (micro)`);
-  }
-}
-
 async function verifyWhitelistIssuer(assetId: string, asaId: number, issuerAddress: string) {
   log(`Checking issuer wallet whitelist status for ASA ${asaId}…`);
   // The distribute endpoint auto-whitelists the issuer via compliance service
@@ -205,20 +166,16 @@ async function main() {
   const adminAsaBalance = adminAsaHolding ? BigInt(adminAsaHolding.amount) : 0n;
 
   if (assetStatus === 'ACTIVE' || adminAsaBalance === 0n) {
-    // Tokens are in vault OR market already activated — activateMarket handles distribution + seeding
     const reason = assetStatus === 'ACTIVE' ? 'market already ACTIVE' : 'tokens are in vault (admin has 0)';
     ok(`Skipping manual distribution: ${reason}`);
-    ok(`activateMarket (test 04) will distribute from vault → issuer and seed SELL orders`);
+    ok(`Pool liquidity is seeded on-chain by activateMarket (test 04)`);
     log(`Using issuer wallet: ${issuerWalletAddress.slice(0, 20)}…`);
 
-    if (assetStatus === 'ACTIVE') {
-      await verifyOrderbookDepth(assetId, 0);
-    }
     await verifyWhitelistIssuer(assetId, asaId, issuerWalletAddress);
 
-    saveState({ adminToken, issuerWalletAddress, distributeTxid: 'vault-auto-distributes-on-activation', seedOrderId: 'N/A' });
+    saveState({ adminToken, issuerWalletAddress, distributeTxid: 'vault-auto-distributes-on-activation' });
 
-    console.log(`\n✅ TEST 03 PASSED (tokens held by vault — distribution deferred to activateMarket)`);
+    console.log(`\n✅ TEST 03 PASSED (tokens held by vault — distribution handled by activateMarket)`);
     console.log(`   Issuer wallet:   ${issuerWalletAddress}\n`);
     return;
   }
@@ -236,20 +193,12 @@ async function main() {
 
   await verifyIssuerWalletBalance(algod, issuerWalletAddress, asaId, BigInt(distributeAmount) - 1n);
 
-  // Seed 50,000 tokens as initial SELL orders (50_000 * 1e6)
-  const seedQty = '50000000000';
-  const seedOrderId = await seedSellOrders(adminToken, assetId, issuerWalletAddress, seedQty);
-
-  await new Promise((r) => setTimeout(r, 500));
-
-  await verifyOrderbookDepth(assetId, 1);
   await verifyWhitelistIssuer(assetId, asaId, issuerWalletAddress);
 
-  saveState({ adminToken, issuerWalletAddress, distributeTxid, seedOrderId });
+  saveState({ adminToken, issuerWalletAddress, distributeTxid });
 
   console.log(`\n✅ TEST 03 PASSED`);
   console.log(`   Distribute txid: ${distributeTxid}`);
-  console.log(`   Seed order id:   ${seedOrderId}`);
   console.log(`   Issuer wallet:   ${issuerWalletAddress}\n`);
 }
 
