@@ -19,7 +19,7 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "db:studio": "turbo run db:studio",
-    "db:init": "cd services/identity && npx prisma migrate dev --name init && cd ../asset && npx prisma migrate dev --name init && cd ../compliance && npx prisma migrate dev --name init && cd ../orderbook && npx prisma migrate dev --name init && cd ../settlement && npx prisma migrate dev --name init",
+    "db:init": "cd services/identity && npx prisma migrate dev --name init && cd ../asset && npx prisma migrate dev --name init && cd ../compliance && npx prisma migrate dev --name init && cd ../settlement && npx prisma migrate dev --name init",
     "testnet": "./scripts/start-testnet.sh",
     "deploy:contracts": "npx ts-node --esm scripts/deploy-contracts.ts",
     "seed": "npx ts-node --esm scripts/seed-admin.ts",

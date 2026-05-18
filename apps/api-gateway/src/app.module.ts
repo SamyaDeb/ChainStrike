@@ -18,14 +18,12 @@ import { HealthController } from './health/health.controller';
         JWT_SECRET: Joi.string().required(),
         IDENTITY_SERVICE_URL: Joi.string().required(),
         ASSET_SERVICE_URL: Joi.string().required(),
-        ORDERBOOK_SERVICE_URL: Joi.string().required(),
         COMPLIANCE_SERVICE_URL: Joi.string().required(),
         SETTLEMENT_SERVICE_URL: Joi.string().required(),
       }).options({ allowUnknown: true }),
     }),
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 60_000, limit: 120 },
-      { name: 'orders', ttl: 1_000, limit: 10 },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

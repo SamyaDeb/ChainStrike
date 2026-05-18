@@ -21,16 +21,7 @@ export const Topics = {
   ASSET_STATUS_CHANGED: 'asset.status.changed',
   ASSET_METADATA_UPDATED: 'asset.metadata_updated',
   ASSET_SUSPENDED: 'asset.suspended',
-
-  // Order events (published by: orderbook-service)
-  ORDER_PLACED: 'order.placed',
-  ORDER_CANCELLED: 'order.cancelled',
-  ORDER_REJECTED: 'order.rejected',
-  ORDER_EXPIRED: 'order.expired',
-
-  // Matching events (published by: orderbook-service)
-  ORDER_MATCHED: 'order.matched',
-  ORDER_PARTIALLY_FILLED: 'order.partially_filled',
+  ASSET_LP_TOKENS_READY: 'asset.lp_tokens_ready',
 
   // Settlement events (published by: settlement-service)
   TRADE_SETTLED: 'trade.settled',
@@ -59,9 +50,6 @@ export const ConsumerGroups = {
   COMPLIANCE_KYC: 'compliance-service.kyc-processor',
   COMPLIANCE_ASSET: 'compliance-service.asset-processor',
   COMPLIANCE_TRADE: 'compliance-service.trade-monitor',
-
-  ORDERBOOK_WHITELIST: 'orderbook-service.whitelist-processor',
-  ORDERBOOK_ASSET: 'orderbook-service.asset-processor',
 
   SETTLEMENT_MATCHES: 'settlement-service.match-processor',
 

@@ -17,9 +17,6 @@ export class ProxyModule implements NestModule {
       '/api/v1/users': this.config.get('IDENTITY_SERVICE_URL', 'http://localhost:3001'),
       '/api/v1/wallets': this.config.get('IDENTITY_SERVICE_URL', 'http://localhost:3001'),
       '/api/v1/assets': this.config.get('ASSET_SERVICE_URL', 'http://localhost:3002'),
-      '/api/v1/orders': this.config.get('ORDERBOOK_SERVICE_URL', 'http://localhost:3003'),
-      '/api/v1/orderbook': this.config.get('ORDERBOOK_SERVICE_URL', 'http://localhost:3003'),
-      '/api/v1/markets': this.config.get('ORDERBOOK_SERVICE_URL', 'http://localhost:3003'),
       '/api/v1/compliance': this.config.get('COMPLIANCE_SERVICE_URL', 'http://localhost:3004'),
       '/api/v1/settlements': this.config.get('SETTLEMENT_SERVICE_URL', 'http://localhost:3005'),
     };
