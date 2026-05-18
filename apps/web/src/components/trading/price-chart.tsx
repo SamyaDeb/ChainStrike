@@ -4,89 +4,111 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 
-interface OhlcvBar {
-  openTime: string;
-  open: string;
-  high: string;
-  low: string;
-  close: string;
-  volume: string;
-}
+const RANGES = ['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const;
+type Range = typeof RANGES[number];
 
 interface Props {
   assetId: string;
-  interval?: '1m' | '5m' | '15m' | '1h' | '1d';
+  defaultRange?: Range;
 }
 
-const INTERVALS = ['1m', '5m', '15m', '1h', '1d'] as const;
+export function PriceChart({ assetId, defaultRange = '1W' }: Props) {
+  const [range, setRange] = useState<Range>(defaultRange);
 
-function toUsdc(microUsdc: string) {
-  return Number(microUsdc) / 1_000_000;
-}
-
-export function PriceChart({ assetId, interval: initInterval = '1h' }: Props) {
-  const [interval, setInterval] = useState(initInterval);
-
-  const { data: bars } = useQuery({
-    queryKey: ['ohlcv', assetId, interval],
+  const { data: points = [] } = useQuery({
+    queryKey: ['price-history', assetId, range],
     queryFn: async () => {
-      const { data } = await api.get(`/orders/${assetId}/ohlcv?interval=${interval}&limit=60`);
-      return (data as OhlcvBar[]).map((bar) => ({
-        time: new Date(bar.openTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        open: toUsdc(bar.open),
-        high: toUsdc(bar.high),
-        low: toUsdc(bar.low),
-        close: toUsdc(bar.close),
-        volume: Number(bar.volume) / 1_000_000,
+      const { data } = await api.get(`/assets/${assetId}/price-history?range=${range}`);
+      return (data as Array<{ price: number; ts: string }>).map((p) => ({
+        price: p.price,
+        time: new Date(p.ts).toLocaleDateString([], { month: 'short', day: 'numeric' }),
       }));
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
+  const minPrice = points.length ? Math.min(...points.map((p) => p.price)) * 0.995 : 0;
+  const maxPrice = points.length ? Math.max(...points.map((p) => p.price)) * 1.005 : 1;
+
   return (
-    <div className="bg-[#1A1D27] rounded-xl border border-[#2A2D3A] p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Price</h3>
-        <div className="flex gap-1">
-          {INTERVALS.map((iv) => (
-            <button
-              key={iv}
-              onClick={() => setInterval(iv)}
-              className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                interval === iv ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-              }`}
-            >
-              {iv}
-            </button>
-          ))}
-        </div>
+    <div style={{ fontFamily: 'var(--font-plus-jakarta, "Plus Jakarta Sans", system-ui)' }}>
+      {/* Range tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {RANGES.map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            style={{
+              fontSize: 12,
+              fontWeight: range === r ? 700 : 500,
+              padding: '4px 10px',
+              borderRadius: 6,
+              border: 'none',
+              cursor: 'pointer',
+              background: range === r ? '#0a0a0a' : 'transparent',
+              color: range === r ? '#fff' : '#666',
+              transition: 'all 0.15s',
+            }}
+          >
+            {r}
+          </button>
+        ))}
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={bars ?? []} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2A2D3A" vertical={false} />
-          <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#6B7280' }} tickLine={false} axisLine={false} />
-          <YAxis
-            domain={['auto', 'auto']}
-            tick={{ fontSize: 10, fill: '#6B7280' }}
-            tickLine={false}
-            axisLine={false}
-            width={55}
-            tickFormatter={(v: number) => `$${v.toFixed(2)}`}
-          />
-          <Tooltip
-            contentStyle={{ background: '#1A1D27', border: '1px solid #2A2D3A', borderRadius: 8, fontSize: 12 }}
-            labelStyle={{ color: '#9CA3AF' }}
-            itemStyle={{ color: '#E5E7EB' }}
-            formatter={(v: number) => [`$${v.toFixed(4)}`]}
-          />
-          <Bar dataKey="volume" fill="#3B82F620" />
-          <Line dataKey="close" stroke="#3B82F6" dot={false} strokeWidth={1.5} />
-        </ComposedChart>
-      </ResponsiveContainer>
+      {points.length === 0 ? (
+        <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 13 }}>
+          No price data yet — snapshots recorded every 5 min after market opens.
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#0a0a0a" stopOpacity={0.15} />
+                <stop offset="95%" stopColor="#0a0a0a" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 11, fill: '#999' }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={[minPrice, maxPrice]}
+              tick={{ fontSize: 11, fill: '#999' }}
+              tickLine={false}
+              axisLine={false}
+              width={60}
+              tickFormatter={(v: number) => `$${v.toFixed(4)}`}
+            />
+            <Tooltip
+              contentStyle={{
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                fontSize: 12,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              }}
+              formatter={(v: number) => [`$${v.toFixed(6)}`, 'Price']}
+              labelStyle={{ color: '#666', marginBottom: 4 }}
+            />
+            <Area
+              type="monotone"
+              dataKey="price"
+              stroke="#0a0a0a"
+              strokeWidth={1.5}
+              fill="url(#priceGrad)"
+              dot={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
