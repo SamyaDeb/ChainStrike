@@ -18,7 +18,7 @@ import { itob, btoi } from '@algorandfoundation/algorand-typescript/op';
 // Enforces all compliance rules before any token transfer is allowed.
 //
 // Called by Settlement Contract before executing trades.
-// Also used for P2P transfer validation outside the orderbook.
+// Also used for P2P transfer validation.
 //
 // Rules enforced:
 //   1. Both parties must be whitelisted in WhitelistRegistry
