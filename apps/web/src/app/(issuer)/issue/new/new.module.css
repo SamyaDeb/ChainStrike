@@ -1,0 +1,687 @@
+/* ─── Page shell ─────────────────────────────────────────────────────────── */
+.page {
+  background: #ffffff;
+  min-height: 100vh;
+  font-family: var(--font-plus-jakarta, "Plus Jakarta Sans", system-ui, sans-serif);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  color: #0a0a0a;
+}
+
+.main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 40px 100px;
+}
+
+/* ─── Page header ─────────────────────────────────────────────────────────── */
+.pageHeader {
+  padding: 40px 0 36px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.pageTitle {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #0a0a0a;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.pageSub {
+  font-size: 15px;
+  color: #707070;
+  margin: 10px 0 0;
+  font-weight: 400;
+  line-height: 1.6;
+  max-width: 480px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #707070;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.backBtn:hover { color: #0a0a0a; }
+
+/* ─── Two-column layout ───────────────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 64px;
+  align-items: start;
+}
+
+/* ─── Form (left column) ──────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 52px;
+}
+
+/* ─── Form sections ───────────────────────────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.sectionHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+  margin: 0;
+}
+
+.sectionSub {
+  font-size: 14px;
+  color: #9a9a9a;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ─── Field groups ────────────────────────────────────────────────────────── */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 80px;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Labels & hints ──────────────────────────────────────────────────────── */
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.01em;
+}
+
+.hint {
+  font-size: 12px;
+  color: #9a9a9a;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.required {
+  color: #c93f3f;
+  margin-left: 2px;
+}
+
+/* ─── Inputs ──────────────────────────────────────────────────────────────── */
+.input {
+  height: 48px;
+  padding: 0 16px;
+  border: 1.5px solid #e8e8e8;
+  border-radius: 12px;
+  font-family: var(--font-plus-jakarta, sans-serif);
+  font-size: 15px;
+  font-weight: 400;
+  color: #0a0a0a;
+  background: #ffffff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: #c0c0c0;
+  font-weight: 400;
+}
+
+.input:focus {
+  border-color: #0a0a0a;
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.07);
+}
+
+.inputUpper {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.textarea {
+  height: auto;
+  padding: 14px 16px;
+  resize: none;
+  line-height: 1.65;
+}
+
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23707070' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+/* ─── Logo upload ─────────────────────────────────────────────────────────── */
+.logoUploadRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.logoPreview {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 24px;
+  color: #ffffff;
+  background: #0a0a0a;
+  border: 1.5px solid #ececec;
+  letter-spacing: -0.02em;
+}
+
+.logoPreviewImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logoDropZone {
+  flex: 1;
+  border: 1.5px dashed #dcdcdc;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: #fafafa;
+  text-align: center;
+  min-height: 80px;
+  justify-content: center;
+}
+
+.logoDropZone:hover,
+.logoDropZoneActive {
+  border-color: #0a0a0a;
+  background: #f5f5f5;
+}
+
+.logoDropIcon { color: #b0b0b0; }
+
+.logoDropLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.logoDropSub {
+  font-size: 12px;
+  color: #9a9a9a;
+}
+
+.logoClearBtn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c93f3f;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 2px;
+}
+
+.logoClearBtn:hover { text-decoration: underline; }
+
+/* ─── Liquidity deposit ───────────────────────────────────────────────────── */
+.liquidityBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.liquidityTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.liquidityInputRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.liquidityCurrency {
+  font-size: 14px;
+  font-weight: 600;
+  color: #707070;
+  flex-shrink: 0;
+}
+
+.liquidityEstimate {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #166534;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.liquidityEstimateIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #1f9b5e;
+}
+
+.liquidityInfoBlock {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liquidityInfoTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0a0a0a;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+}
+
+.liquidityInfoRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #707070;
+  line-height: 1.5;
+}
+
+.liquidityInfoDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c0c0c0;
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+
+/* ─── Section divider ─────────────────────────────────────────────────────── */
+.divider {
+  border: 0;
+  border-top: 1px solid #f0f0f0;
+  margin: 0;
+}
+
+/* ─── Info / notice boxes ─────────────────────────────────────────────────── */
+.infoBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  background: #fafafa;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #707070;
+  line-height: 1.6;
+}
+
+.infoBox strong { font-weight: 600; color: #0a0a0a; }
+.infoBoxIcon { flex-shrink: 0; color: #9a9a9a; margin-top: 1px; }
+
+/* ─── Error box ───────────────────────────────────────────────────────────── */
+.errorBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fef2f2;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #c93f3f;
+  line-height: 1.5;
+}
+
+/* ─── Form actions (bottom) ───────────────────────────────────────────────── */
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.submitBtn {
+  height: 48px;
+  padding: 0 28px;
+  border-radius: 999px;
+  font-family: var(--font-plus-jakarta, sans-serif);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  background: #0a0a0a;
+  color: #ffffff;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s;
+}
+
+.submitBtn:hover:not(:disabled) { background: #222222; }
+.submitBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cancelBtn {
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-family: var(--font-plus-jakarta, sans-serif);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  background: #f1f1f1;
+  color: #0a0a0a;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+
+.cancelBtn:hover:not(:disabled) { background: #e8e8e8; }
+.cancelBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ─── Spinner ─────────────────────────────────────────────────────────────── */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinnerDark {
+  border-color: #ececec;
+  border-top-color: #0a0a0a;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Sticky sidebar (right column) ──────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Token preview card */
+.previewCard {
+  border: 1px solid #ececec;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.previewCardTop {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.previewHead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.previewIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: #ffffff;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+  letter-spacing: -0.02em;
+}
+
+.previewIconImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.previewTicker {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+  line-height: 1;
+}
+
+.previewName {
+  font-size: 13px;
+  color: #707070;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.previewBadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.previewBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f1f1f1;
+  color: #4a4a4a;
+  letter-spacing: 0.02em;
+}
+
+.previewStats {
+  border-top: 1px solid #f0f0f0;
+  padding: 16px 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.previewStatLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: #9a9a9a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+}
+
+.previewStatValue {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+  margin: 0;
+}
+
+.previewEmpty {
+  font-size: 13px;
+  color: #c0c0c0;
+  text-align: center;
+  padding: 24px;
+  line-height: 1.5;
+}
+
+/* Wallet status cards in sidebar */
+.walletAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fffbeb;
+  border: 1px solid #f5d87a;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.walletAlertIcon { flex-shrink: 0; color: #92660a; margin-top: 1px; }
+.walletAlertTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #78500a;
+  margin: 0 0 4px;
+}
+.walletAlertBody {
+  font-size: 12px;
+  color: #92660a;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.walletConnectLinks { display: flex; gap: 10px; flex-wrap: wrap; }
+.walletConnectBtn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #78500a;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.walletConnectBtn:hover { text-decoration: none; }
+
+.walletConnected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0a0a0a;
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+.walletDot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #1f9b5e;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(31, 155, 94, 0.25);
+}
+.walletLabel { font-size: 12px; font-weight: 600; color: #ffffff; }
+.walletAddress {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: ui-monospace, "SF Mono", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Progress indicator */
+.progressBox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fafafa;
+  border: 1px solid #ececec;
+  border-radius: 14px;
+}
+.progressLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0a0a0a;
+  line-height: 1.4;
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .layout  { grid-template-columns: 1fr; gap: 40px; }
+  .sidebar { position: static; }
+  .main    { padding: 0 24px 80px; }
+  .pageHeader { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+@media (max-width: 600px) {
+  .main      { padding: 0 16px 60px; }
+  .row       { grid-template-columns: 1fr; }
+  .row3      { grid-template-columns: 1fr 1fr; }
+  .pageTitle { font-size: 26px; }
+  .formActions { flex-direction: column-reverse; }
+  .submitBtn { width: 100%; justify-content: center; }
+  .cancelBtn { width: 100%; justify-content: center; }
+}
