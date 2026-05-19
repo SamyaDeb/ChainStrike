@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["bash scripts/railway/build.sh"]
+
+[start]
+cmd = "node $START_FILE"
