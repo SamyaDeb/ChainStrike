@@ -43,6 +43,11 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'ChainStrike — RWA Exchange',
   description: 'Trade compliant real-world asset tokens on Algorand',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
