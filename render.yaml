@@ -1,18 +1,12 @@
 services:
-  # ─── Identity Service ─────────────────────────────────────────────────────
   - type: web
     name: chainstrike-identity
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: >-
-      npm ci &&
-      npx turbo run db:generate &&
-      npx turbo run build --filter=@chainstrike/identity-service... &&
-      cd services/identity &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma
-    startCommand: node services/identity/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh services/identity @chainstrike/identity-service"
+    startCommand: "node services/identity/dist/main.js"
     envVars:
       - key: NODE_ENV
         value: production
@@ -51,20 +45,14 @@ services:
       - key: KAFKA_ENABLED
         value: false
 
-  # ─── Asset Service ────────────────────────────────────────────────────────
   - type: web
     name: chainstrike-asset
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: >-
-      npm ci &&
-      npx turbo run db:generate &&
-      npx turbo run build --filter=@chainstrike/asset-service... &&
-      cd services/asset &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma
-    startCommand: node services/asset/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh services/asset @chainstrike/asset-service"
+    startCommand: "node services/asset/dist/main.js"
     envVars:
       - key: NODE_ENV
         value: production
@@ -117,20 +105,14 @@ services:
       - key: KAFKA_ENABLED
         value: false
 
-  # ─── Compliance Service ───────────────────────────────────────────────────
   - type: web
     name: chainstrike-compliance
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: >-
-      npm ci &&
-      npx turbo run db:generate &&
-      npx turbo run build --filter=@chainstrike/compliance-service... &&
-      cd services/compliance &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma
-    startCommand: node services/compliance/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh services/compliance @chainstrike/compliance-service"
+    startCommand: "node services/compliance/dist/main.js"
     envVars:
       - key: NODE_ENV
         value: production
@@ -173,20 +155,14 @@ services:
       - key: KAFKA_ENABLED
         value: false
 
-  # ─── Settlement Service ───────────────────────────────────────────────────
   - type: web
     name: chainstrike-settlement
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: >-
-      npm ci &&
-      npx turbo run db:generate &&
-      npx turbo run build --filter=@chainstrike/settlement-service... &&
-      cd services/settlement &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma
-    startCommand: node services/settlement/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh services/settlement @chainstrike/settlement-service"
+    startCommand: "node services/settlement/dist/main.js"
     envVars:
       - key: NODE_ENV
         value: production
@@ -225,20 +201,14 @@ services:
       - key: KAFKA_ENABLED
         value: false
 
-  # ─── Notification Service ─────────────────────────────────────────────────
   - type: web
     name: chainstrike-notification
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: >-
-      npm ci &&
-      npx turbo run db:generate &&
-      npx turbo run build --filter=@chainstrike/notification-service... &&
-      cd services/notification &&
-      npx prisma migrate deploy --schema=prisma/schema.prisma
-    startCommand: node services/notification/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh services/notification @chainstrike/notification-service"
+    startCommand: "node services/notification/dist/main.js"
     envVars:
       - key: NODE_ENV
         value: production
@@ -265,15 +235,14 @@ services:
       - key: KAFKA_ENABLED
         value: false
 
-  # ─── API Gateway (entry point for frontend) ───────────────────────────────
   - type: web
     name: chainstrike-gateway
     env: node
     region: oregon
     plan: free
     branch: main
-    buildCommand: npm ci && npx turbo run build --filter=@chainstrike/api-gateway...
-    startCommand: node apps/api-gateway/dist/main.js
+    buildCommand: "bash scripts/render/build-service.sh apps/api-gateway @chainstrike/api-gateway"
+    startCommand: "node apps/api-gateway/dist/main.js"
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
