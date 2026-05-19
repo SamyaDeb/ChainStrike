@@ -194,6 +194,10 @@ services:
         value: ""
       - key: SETTLEMENT_MNEMONIC
         value: crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss
+      - key: ALGORAND_ADMIN_MNEMONIC
+        value: crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss
+      - key: TREASURY_WALLET_ADDRESS
+        value: HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM
       - key: ESCROW_CONTRACT_APP_ID
         value: 762585096
       - key: USDC_ASSET_ID
@@ -232,6 +236,8 @@ services:
         value: noreply@chainstrike.io
       - key: SENDGRID_FROM_NAME
         value: ChainStrike
+      - key: KAFKA_BROKERS
+        value: localhost:9092
       - key: KAFKA_ENABLED
         value: false
 
