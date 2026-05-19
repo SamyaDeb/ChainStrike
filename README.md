@@ -1,183 +1,297 @@
-<img width="1458" height="797" alt="ChainStrike" src="https://github.com/user-attachments/assets/29691772-9917-4e2b-849c-d0ea84b5521c" />
+<img width="1458" height="797" alt="ChainStrike — Institutional RWA Tokenization on Algorand" src="https://github.com/user-attachments/assets/29691772-9917-4e2b-849c-d0ea84b5521c" />
+
+<div align="center">
 
 # ChainStrike
 
-**Tokenize real-world assets. Trade them on-chain. Built on Algorand.**
+### Institutional RWA Tokenization & AMM Trading on Algorand
 
-ChainStrike is a full-stack platform where issuers can tokenize real-world assets — gold, real estate, bonds, private credit — and list them on a live Tinyman V2 AMM. Investors buy, sell, and provide liquidity directly from their browser using Pera or Defly wallet. No order books. No intermediaries.
+**Tokenize real-world assets. List on AMM. Trade on-chain.**
 
-**Live demo:** [chainstrike.vercel.app](https://chainstrike.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-chainstrike.vercel.app-0a0a0a?style=for-the-badge)](https://chainstrike.vercel.app)
+[![Algorand](https://img.shields.io/badge/Algorand-Testnet-00D4AA?style=for-the-badge)](https://testnet.algoexplorer.io)
+[![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)](#license)
 
----
-
-## What it does
-
-**For issuers**
-- Register, complete KYB verification
-- Submit an asset with legal docs and a USDC liquidity deposit
-- Admin reviews and deploys the ASA + seeds the Tinyman pool
-- LP tokens are locked in a vault for 90 days, then claimable
-
-**For investors**
-- Register, complete KYC, connect your Algorand wallet
-- Browse live assets on the markets page
-- Swap USDC ↔ RWA tokens on-chain via Tinyman
-- Add USDC liquidity to any pool and earn swap fees
+</div>
 
 ---
 
-## Tech stack
+## Overview
 
-| | |
+ChainStrike is a production-grade platform for tokenizing real-world assets — gold, real estate, corporate bonds, private credit — as Algorand Standard Assets (ASAs) and listing them on Tinyman V2 AMM pools with institutional-grade compliance built in.
+
+Every asset goes through a multi-step KYB verification and admin approval workflow before an ASA is deployed on-chain. Compliance is enforced at the smart contract level via a whitelist registry — not just in the application layer. Investors trade directly from their wallets with no custodian and no order book.
+
+**Core properties:**
+- Non-custodial — investors swap directly on-chain via Tinyman SDK
+- Compliant by design — `defaultFrozen` ASAs enforced by on-chain whitelist registry
+- Transparent — all asset custody, liquidity, and LP lockups in auditable smart contracts
+- Modular — microservice architecture, each service independently deployable
+
+---
+
+## How It Works
+
+### Issuers — Tokenize an Asset
+
+```
+Register & KYB → Submit Asset + USDC Deposit → Admin Review (5 stages)
+→ ASA Deployed On-Chain → Tinyman Pool Seeded → Live on ChainStrike Markets
+→ LP Tokens Locked in Vault (90 days) → Claimable by Issuer
+```
+
+1. Register and complete KYB verification (business entity)
+2. Submit an asset application with legal documents and a USDC liquidity deposit held in escrow
+3. Admin reviews the asset through 5 compliance stages and deploys the ASA
+4. The Tinyman V2 AMM pool is bootstrapped at the listing price
+5. LP tokens from the initial liquidity are locked in a per-asset vault for 90 days
+
+### Investors — Trade RWA Tokens
+
+```
+Register & KYC → Connect Pera/Defly Wallet → Get Whitelisted
+→ Browse Markets → Swap USDC ↔ RWA → Provide Liquidity → Earn Fees
+```
+
+1. Register, complete KYC, and connect an Algorand wallet (Pera or Defly)
+2. Admin whitelists the wallet via the on-chain compliance registry
+3. Swap USDC ↔ RWA tokens directly on-chain — no ChainStrike servers involved in the swap
+4. Add single-asset USDC liquidity, receive LP tokens, earn 0.3% on every swap
+
+---
+
+## Architecture
+
+ChainStrike is a **Turborepo monorepo** with npm workspaces — a Next.js 15 frontend, six NestJS microservices, and shared packages.
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Next.js Frontend                  │
+│         markets · trade · liquidity · issuer         │
+└──────────────────────┬──────────────────────────────┘
+                       │ HTTPS
+┌──────────────────────▼──────────────────────────────┐
+│                    API Gateway                       │
+│          JWT auth · rate limiting · routing          │
+└──┬──────────┬──────────┬──────────┬─────────────────┘
+   │          │          │          │
+┌──▼──┐  ┌───▼──┐  ┌────▼──┐  ┌───▼──────────┐
+│ ID  │  │Asset │  │Comply │  │  Settlement  │
+│ svc │  │ svc  │  │  svc  │  │     svc      │
+└──┬──┘  └──┬───┘  └───┬───┘  └──────────────┘
+   │         │          │
+   └─────────▼──────────┘
+        PostgreSQL
+   (per-service schemas)
+```
+
+### Services
+
+| Service | Port | Responsibility |
+|---|---|---|
+| `api-gateway` | 8080 | Entry point — JWT validation, rate limiting, reverse proxy |
+| `identity` | 3001 | Auth (JWT + refresh), KYC/KYB, email verification, wallet management |
+| `asset` | 3002 | Asset lifecycle, ASA deployment, AMM activation, price feed snapshots |
+| `compliance` | 3004 | On-chain whitelist, freeze/unfreeze, AML screening |
+| `settlement` | 3005 | Atomic trade settlement records |
+| `notification` | 3006 | Email and in-app notification fan-out |
+| `analytics` | 3007 | Event aggregation and reporting |
+
+### Smart Contracts
+
+| Contract | Role |
 |---|---|
-| Blockchain | Algorand (testnet / mainnet) |
-| Smart contracts | AVM / ARC-4 |
+| `IssuanceLiquidityEscrow` | Holds issuer USDC during the verification window; released on asset approval |
+| `TokenVault` | Per-asset custody vault for RWA tokens, USDC, and LP tokens with lockup enforcement |
+| `WhitelistRegistry` | On-chain compliance registry — controls which wallets can hold each `defaultFrozen` ASA |
+| `TransferRestriction` | Enforces compliance rules before every token transfer at the AVM level |
+| Tinyman V2 Pool | Price discovery, swap execution, and liquidity provision per asset |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Blockchain | Algorand (AVM, ARC-4, ARC-3) — testnet & mainnet |
 | AMM | Tinyman V2 |
-| Backend | NestJS microservices |
-| Frontend | Next.js 15 (App Router) |
-| Database | PostgreSQL — per-service schemas via Prisma |
+| Backend | NestJS 10, TypeScript, Prisma ORM |
+| Frontend | Next.js 15 (App Router), React Query, Recharts |
+| Database | PostgreSQL — single instance, per-service schemas |
 | Monorepo | Turborepo + npm workspaces |
-| Deployed on | Vercel (frontend) · Render (backend) |
+| Auth | JWT (access + refresh), Argon2id password hashing |
+| Wallets | Pera Wallet, Defly — WalletConnect v2 |
+| Hosting | Vercel (frontend) · Render (backend + DB) |
 
 ---
 
-## Services
-
-| Service | What it does |
-|---|---|
-| `api-gateway` | Entry point — JWT auth, rate limiting, reverse proxy |
-| `identity` | Registration, login, KYC/KYB, wallet management |
-| `asset` | Asset lifecycle, ASA deployment, AMM, price feed |
-| `compliance` | Whitelist, freeze/unfreeze, AML screening |
-| `settlement` | Trade settlement |
-| `notification` | Email and in-app notifications |
-| `analytics` | Event aggregation |
-| `web` | Next.js app — markets, trade, liquidity, issuer dashboard |
-
----
-
-## Project layout
+## Repository Layout
 
 ```
 apps/
-  api-gateway/     Entry point — JWT, rate limiting, routing
-  web/             Next.js 15 — markets, trade, liquidity, issuer
+  api-gateway/          NestJS reverse proxy — JWT, rate limiting, routing
+  web/                  Next.js 15 — markets, trade, liquidity, issuer dashboard
 
 services/
-  identity/        Auth, KYC/KYB, wallets
-  asset/           Asset CRUD, ASA deploy, AMM, price snapshots
-  compliance/      Whitelist, AML, freeze
-  settlement/      Atomic trade settlement
-  notification/    Push and email
-  analytics/       Event reporting
+  identity/             Auth, KYC/KYB, email verification, Algorand wallet registration
+  asset/                Asset CRUD, ASA deploy, Tinyman pool activation, price snapshots
+  compliance/           On-chain whitelist, AML screening, freeze/unfreeze
+  settlement/           Atomic trade settlement
+  notification/         Email (SendGrid) and in-app notifications
+  analytics/            Event aggregation and reporting
 
 packages/
-  algorand/        Algorand SDK wrapper
-  events/          Kafka topic registry
-  types/           Shared TypeScript types
-  config/          Shared NestJS config
-  database/        Shared Prisma helpers
-  logger/          Structured logger
+  algorand/             Algorand SDK wrapper (ASA ops, ARC-3 metadata, transactions)
+  events/               Kafka topic registry — single source of truth for all event names
+  types/                Shared TypeScript types across services
+  config/               Shared NestJS ConfigModule helpers
+  database/             Shared Prisma client utilities
+  logger/               Structured logger (Pino)
 
 contracts/
-  issuance-escrow/       Holds issuer USDC during verification
-  token-vault/           Per-asset custody vault
-  whitelist-registry/    On-chain compliance registry
-  transfer-restriction/  Enforces compliance before transfers
+  issuance-escrow/      USDC escrow during asset verification
+  token-vault/          Per-asset custody vault with LP lockup
+  whitelist-registry/   On-chain compliance whitelist
+  transfer-restriction/ Transfer-level compliance enforcement
+  settlement-contract/  Atomic swap settlement
 ```
 
 ---
 
-## Running locally
+## Local Development
 
-**Prerequisites:** Node.js 20+, PostgreSQL, a funded Algorand testnet wallet
+### Prerequisites
+
+- **Node.js 20+**
+- **PostgreSQL** (single instance; services use separate schemas)
+- **Algorand testnet wallet** — funded with ALGO and testnet USDC (`ASA 10458941`)
+  - Get ALGO: [bank.testnet.algorand.network](https://bank.testnet.algorand.network)
+- **WalletConnect Project ID** — [cloud.walletconnect.com](https://cloud.walletconnect.com)
+
+### Setup
 
 ```bash
-# 1. Clone and install
+# 1. Clone and install dependencies
 git clone https://github.com/SamyaDeb/ChainStrike
 cd ChainStrike
 npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Required: ALGORAND_ADMIN_MNEMONIC, JWT_SECRET, *_DATABASE_URL,
-#           NEXT_PUBLIC_WC_PROJECT_ID
+# Edit .env — minimum required:
+#   ALGORAND_ADMIN_MNEMONIC   funded testnet wallet (platform signing key)
+#   JWT_SECRET                openssl rand -hex 32
+#   INTERNAL_SECRET           openssl rand -hex 32
+#   *_DATABASE_URL            PostgreSQL connection per service
+#   NEXT_PUBLIC_WC_PROJECT_ID WalletConnect project ID
 
-# 3. Push DB schema
-npx prisma db push
+# 3. Push database schemas (no migration files — uses prisma db push)
+npx turbo run db:generate
+npx prisma db push   # run once per service schema
 
-# 4. Start everything
+# 4. Start all services in parallel
 npm run dev
 ```
 
-- Frontend → `http://localhost:3000`
-- API gateway → `http://localhost:8080/api/v1`
+| URL | Service |
+|---|---|
+| `http://localhost:3000` | Next.js frontend |
+| `http://localhost:8080/api/v1` | API Gateway |
+| `http://localhost:3001` | Identity service |
+| `http://localhost:3002` | Asset service |
+| `http://localhost:3004` | Compliance service |
 
 ---
 
-## E2E test flow
+## End-to-End Test Suite
+
+The `scripts/e2e/` directory contains a step-by-step automated flow against live services.
 
 ```bash
-npm run e2e              # full automated suite
+# Full suite (requires all services running + funded admin wallet)
+npm run e2e
 
-# or step by step:
-npm run e2e:health       # all services reachable
-npm run e2e:issuer       # register issuer, submit asset
-npm run e2e:admin        # admin approval + ASA deploy
-npm run e2e:distribute   # distribute tokens to issuer wallet
-npm run e2e:activate     # activate market, seed Tinyman pool
-npm run e2e:buy          # verify pool + investor readiness
-npm run e2e:settle       # price history check
-npm run e2e:frontend     # verify all frontend API endpoints
+# Individual steps
+npm run e2e:health       # 00 — verify all services are reachable
+npm run e2e:issuer       # 01 — register issuer, submit asset application
+npm run e2e:admin        # 02 — admin approval flow, ASA deployment
+npm run e2e:distribute   # 03 — distribute tokens, seed issuer wallet
+npm run e2e:activate     # 04 — activate market, seed Tinyman V2 pool
+npm run e2e:buy          # 05 — verify pool reserves + investor readiness
+npm run e2e:settle       # 06 — price history snapshot check
+npm run e2e:frontend     # 07 — validate all frontend-facing API endpoints
 ```
 
 ---
 
-## Key env variables
+## Environment Variables
+
+Full reference is in `.env.example`. Critical variables:
 
 ```bash
-# Algorand
+# ── Algorand ───────────────────────────────────────────────────
 ALGORAND_NETWORK=testnet
 ALGORAND_ALGOD_SERVER=https://testnet-api.algonode.cloud
-ALGORAND_ADMIN_MNEMONIC="word word word ..."
+ALGORAND_ALGOD_PORT=443
+ALGORAND_ADMIN_MNEMONIC="word word word ..."   # platform signing key
 
-# Auth
+# ── Auth ───────────────────────────────────────────────────────
 JWT_SECRET=<64-char hex>
+INTERNAL_SECRET=<64-char hex>                  # service-to-service auth
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
 
-# Database (single Postgres, per-service schemas)
-IDENTITY_DATABASE_URL=postgresql://...?schema=identity
-ASSET_DATABASE_URL=postgresql://...?schema=asset
-COMPLIANCE_DATABASE_URL=postgresql://...?schema=compliance
-SETTLEMENT_DATABASE_URL=postgresql://...?schema=settlement
+# ── Database — one Postgres, per-service schemas ───────────────
+IDENTITY_DATABASE_URL=postgresql://user:pass@host:5432/db?schema=identity
+ASSET_DATABASE_URL=postgresql://user:pass@host:5432/db?schema=asset
+COMPLIANCE_DATABASE_URL=postgresql://user:pass@host:5432/db?schema=compliance
+SETTLEMENT_DATABASE_URL=postgresql://user:pass@host:5432/db?schema=settlement
 
-# Deployed contracts (testnet)
+# ── Deployed Contracts (Algorand testnet) ──────────────────────
 WHITELIST_REGISTRY_APP_ID=762550520
 ESCROW_CONTRACT_APP_ID=762585096
+USDC_ASSET_ID=10458941
 
-# Frontend
+# ── Frontend ───────────────────────────────────────────────────
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_WC_PROJECT_ID=<walletconnect id>
+NEXT_PUBLIC_ALGORAND_NETWORK=testnet
 NEXT_PUBLIC_USDC_ASA_ID=10458941
 ```
 
-Full reference in `.env.example`.
+---
+
+## API Reference
+
+All API routes are exposed through the gateway at `/api/v1`. The gateway validates JWT on every request and forwards to the appropriate service.
+
+| Prefix | Service | Key Endpoints |
+|---|---|---|
+| `/auth` | identity | `POST /register` `POST /login` `POST /refresh` `POST /verify-email` |
+| `/kyc` | identity | `POST /submit` `POST /webhook` `GET /status` |
+| `/users` | identity | `GET /me` `PATCH /me` `GET /:id` |
+| `/wallets` | identity | `POST /connect` `POST /sign-challenge` `POST /verify` |
+| `/assets` | asset | `GET /` `POST /` `GET /:id` `PATCH /:id/activate` `GET /:id/price` `GET /:id/price-history` |
+| `/compliance` | compliance | `POST /whitelist` `DELETE /whitelist/:id` `POST /freeze` `POST /unfreeze` |
+| `/settlements` | settlement | `POST /` `GET /:id` |
 
 ---
 
-## API overview
+## Deployment
 
-All routes go through the gateway at `/api/v1`.
+ChainStrike is deployed on **Vercel** (frontend) and **Render** (6 backend services + PostgreSQL).
 
-| Prefix | Service | Notable endpoints |
-|---|---|---|
-| `/auth` | identity | register, login, verify-email |
-| `/kyc` | identity | submit KYC, webhook |
-| `/wallets` | identity | connect wallet, sign challenge |
-| `/assets` | asset | CRUD, deploy-asa, activate, price, price-history |
-| `/compliance` | compliance | whitelist, freeze, AML alerts |
+```
+Frontend    → Vercel       (chainstrike.vercel.app)
+Gateway     → Render       (chainstrike-gateway.onrender.com)
+Services    → Render × 5   (identity, asset, compliance, settlement, notification)
+Database    → Render Postgres (single instance, schema-per-service)
+```
+
+Deployment is defined in `render.yaml` (Blueprint) and triggered automatically on push to `main`. The build script (`scripts/render/build-service.sh`) handles devDependency installation and Prisma client generation before Turborepo builds each service.
 
 ---
 
 ## License
 
-Proprietary — All rights reserved.
+Proprietary — All rights reserved. © 2026 ChainStrike.
