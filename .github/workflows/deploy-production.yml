@@ -12,6 +12,8 @@ jobs:
   deploy:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
