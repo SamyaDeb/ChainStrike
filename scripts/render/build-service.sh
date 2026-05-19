@@ -12,7 +12,7 @@ if [ -z "$SERVICE_DIR" ] || [ -z "$TURBO_FILTER" ]; then
 fi
 
 echo "=== Installing dependencies ==="
-npm ci
+npm ci --include=dev
 
 echo "=== Generating Prisma clients ==="
 npx turbo run db:generate
