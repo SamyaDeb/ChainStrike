@@ -99,13 +99,15 @@ ChainStrike is a **Turborepo monorepo** with npm workspaces — a Next.js 15 fro
 
 ### Smart Contracts
 
-| Contract | Role |
-|---|---|
-| `IssuanceLiquidityEscrow` | Holds issuer USDC during the verification window; released on asset approval |
-| `TokenVault` | Per-asset custody vault for RWA tokens, USDC, and LP tokens with lockup enforcement |
-| `WhitelistRegistry` | On-chain compliance registry — controls which wallets can hold each `defaultFrozen` ASA |
-| `TransferRestriction` | Enforces compliance rules before every token transfer at the AVM level |
-| Tinyman V2 Pool | Price discovery, swap execution, and liquidity provision per asset |
+All contracts are deployed on **Algorand testnet** and verifiable on Pera Explorer.
+
+| Contract | App ID | Role |
+|---|---|---|
+| [`IssuanceLiquidityEscrow`](https://testnet.explorer.perawallet.app/application/762550539/) | `762550539` | Holds issuer USDC during verification; released atomically on asset approval |
+| [`TokenVault`](https://testnet.explorer.perawallet.app/application/762585096/) | `762585096` | Per-asset custody vault — holds RWA tokens, USDC, and LP tokens with 90-day lockup |
+| [`WhitelistRegistry`](https://testnet.explorer.perawallet.app/application/762550520/) | `762550520` | On-chain compliance registry — controls which wallets can hold each `defaultFrozen` ASA |
+| [`TransferRestriction`](https://testnet.explorer.perawallet.app/application/762550538/) | `762550538` | Enforces compliance rules before every token transfer at the AVM level |
+| Tinyman V2 Pool | per asset | Price discovery, swap execution, and liquidity provision — one pool per listed asset |
 
 ---
 
