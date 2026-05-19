@@ -40,7 +40,7 @@ export class PricefeedService {
   @Cron('0 */5 * * * *')
   async snapshotPrices() {
     const activeAssets = await this.prisma.asset.findMany({
-      where: { status: 'ACTIVE', tinymanPoolAddress: { not: null } },
+      where: { status: 'ACTIVE', asaId: { not: null } },
       select: { id: true, asaId: true, tinymanPoolAddress: true },
     });
 
@@ -131,7 +131,7 @@ export class PricefeedService {
 
     // No snapshot yet — read live from pool reserves and persist a first snapshot
     const asset = await this.prisma.asset.findFirst({
-      where: { id: assetId, tinymanPoolAddress: { not: null } },
+      where: { id: assetId, asaId: { not: null } },
       select: { asaId: true, tinymanPoolAddress: true },
     });
     if (!asset?.asaId) return null;

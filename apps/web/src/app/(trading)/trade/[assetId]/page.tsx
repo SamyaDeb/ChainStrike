@@ -171,7 +171,11 @@ export default function AssetDetailPage({ params }: { params: { assetId: string 
 
             {/* Chart */}
             <div style={{ marginBottom: 32 }}>
-              <PriceChart assetId={assetId} />
+              <PriceChart
+                assetId={assetId}
+                asaId={asset.asaId}
+                listingPrice={listingPrice}
+              />
             </div>
 
             {/* ── About ── */}
