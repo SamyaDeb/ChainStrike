@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck web
+        run: npx turbo run typecheck --filter=@chainstrike/web
+
+      - name: Lint web
+        run: npx turbo run lint --filter=@chainstrike/web
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+    env:
+      NEXT_PUBLIC_API_URL: https://placeholder.api
+      NEXT_PUBLIC_WS_URL: wss://placeholder.ws
+      NEXT_PUBLIC_ALGORAND_NETWORK: testnet
+      NEXT_PUBLIC_WC_PROJECT_ID: placeholder
+      NEXT_PUBLIC_DEV_SKIP_ESCROW: 'true'
+      NEXT_PUBLIC_ESCROW_ADDRESS: HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM
+      NEXT_PUBLIC_USDC_ASA_ID: '10458941'
+      NEXT_PUBLIC_ALGORAND_ALGOD_SERVER: https://testnet-api.algonode.cloud
+      NEXT_PUBLIC_ALGORAND_ALGOD_PORT: '443'
+      NEXT_PUBLIC_ALGORAND_ALGOD_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npx turbo run build --filter=@chainstrike/web
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: apps/web/.next
+          retention-days: 7

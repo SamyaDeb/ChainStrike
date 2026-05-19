@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx turbo run build --filter=@chainstrike/web",
+  "installCommand": "npm install",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "ignoreCommand": "npx turbo-ignore @chainstrike/web"
+}
