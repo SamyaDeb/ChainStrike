@@ -17,7 +17,7 @@ echo "Node: $(node --version)"
 echo "NPM: $(npm --version)"
 
 echo "=== Installing dependencies (including devDeps) ==="
-# Unset NODE_ENV during install so devDependencies are always installed
+# Force devDependencies even though NODE_ENV=production at runtime
 NODE_ENV=development npm ci
 
 echo "=== Generating Prisma clients ==="
@@ -25,13 +25,5 @@ npx turbo run db:generate --ui=stream
 
 echo "=== Building $TURBO_FILTER ==="
 npx turbo run build --filter="${TURBO_FILTER}..." --ui=stream
-
-# Run migrations if this service has a prisma schema
-if [ -f "$SERVICE_DIR/prisma/schema.prisma" ]; then
-  echo "=== Running migrations for $SERVICE_DIR ==="
-  cd "$SERVICE_DIR"
-  npx prisma migrate deploy --schema=prisma/schema.prisma
-  cd -
-fi
 
 echo "=== Build complete ==="

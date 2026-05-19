@@ -13,7 +13,7 @@ services:
       - key: IDENTITY_SERVICE_PORT
         value: 10000
       - key: IDENTITY_DATABASE_URL
-        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=identity
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a/chainstrike?schema=identity
       - key: JWT_SECRET
         generateValue: true
       - key: INTERNAL_SECRET
@@ -59,7 +59,7 @@ services:
       - key: ASSET_SERVICE_PORT
         value: 10000
       - key: ASSET_DATABASE_URL
-        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=asset
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a/chainstrike?schema=asset
       - key: JWT_SECRET
         fromService:
           name: chainstrike-identity
@@ -119,7 +119,7 @@ services:
       - key: COMPLIANCE_SERVICE_PORT
         value: 10000
       - key: COMPLIANCE_DATABASE_URL
-        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=compliance
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a/chainstrike?schema=compliance
       - key: JWT_SECRET
         fromService:
           name: chainstrike-identity
@@ -169,7 +169,7 @@ services:
       - key: SETTLEMENT_PORT
         value: 10000
       - key: SETTLEMENT_DATABASE_URL
-        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=settlement
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a/chainstrike?schema=settlement
       - key: JWT_SECRET
         fromService:
           name: chainstrike-identity
@@ -215,7 +215,7 @@ services:
       - key: NOTIFICATION_PORT
         value: 10000
       - key: NOTIFICATION_DATABASE_URL
-        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=notification
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a/chainstrike?schema=notification
       - key: JWT_SECRET
         fromService:
           name: chainstrike-identity
