@@ -23,6 +23,9 @@ export const Topics = {
   ASSET_SUSPENDED: 'asset.suspended',
   ASSET_LP_TOKENS_READY: 'asset.lp_tokens_ready',
 
+  // Order matching events (published by: matching-engine)
+  ORDER_MATCHED: 'order.matched',
+
   // Settlement events (published by: settlement-service)
   TRADE_SETTLED: 'trade.settled',
   SETTLEMENT_FAILED: 'settlement.failed',
