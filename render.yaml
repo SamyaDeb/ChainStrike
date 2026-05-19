@@ -8,9 +8,10 @@ services:
     branch: main
     buildCommand: >-
       npm ci &&
+      npx turbo run db:generate &&
       npx turbo run build --filter=@chainstrike/identity-service... &&
       cd services/identity &&
-      DATABASE_URL="${IDENTITY_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: node services/identity/dist/main.js
     envVars:
       - key: NODE_ENV
@@ -59,9 +60,10 @@ services:
     branch: main
     buildCommand: >-
       npm ci &&
+      npx turbo run db:generate &&
       npx turbo run build --filter=@chainstrike/asset-service... &&
       cd services/asset &&
-      DATABASE_URL="${ASSET_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: node services/asset/dist/main.js
     envVars:
       - key: NODE_ENV
@@ -124,9 +126,10 @@ services:
     branch: main
     buildCommand: >-
       npm ci &&
+      npx turbo run db:generate &&
       npx turbo run build --filter=@chainstrike/compliance-service... &&
       cd services/compliance &&
-      DATABASE_URL="${COMPLIANCE_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: node services/compliance/dist/main.js
     envVars:
       - key: NODE_ENV
@@ -179,9 +182,10 @@ services:
     branch: main
     buildCommand: >-
       npm ci &&
+      npx turbo run db:generate &&
       npx turbo run build --filter=@chainstrike/settlement-service... &&
       cd services/settlement &&
-      DATABASE_URL="${SETTLEMENT_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: node services/settlement/dist/main.js
     envVars:
       - key: NODE_ENV
@@ -230,9 +234,10 @@ services:
     branch: main
     buildCommand: >-
       npm ci &&
+      npx turbo run db:generate &&
       npx turbo run build --filter=@chainstrike/notification-service... &&
       cd services/notification &&
-      DATABASE_URL="${NOTIFICATION_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: node services/notification/dist/main.js
     envVars:
       - key: NODE_ENV
