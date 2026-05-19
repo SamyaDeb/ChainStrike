@@ -37,11 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-typecheck
     env:
-      NEXT_PUBLIC_API_URL: https://placeholder.api
-      NEXT_PUBLIC_WS_URL: wss://placeholder.ws
+      NEXT_PUBLIC_API_URL: https://chainstrike-gateway.onrender.com
+      NEXT_PUBLIC_WS_URL: wss://chainstrike-gateway.onrender.com
       NEXT_PUBLIC_ALGORAND_NETWORK: testnet
-      NEXT_PUBLIC_WC_PROJECT_ID: placeholder
-      NEXT_PUBLIC_DEV_SKIP_ESCROW: 'true'
+      NEXT_PUBLIC_WC_PROJECT_ID: b93815749c4f072d461ec5a43f7fdd2de
+      NEXT_PUBLIC_DEV_SKIP_ESCROW: 'false'
       NEXT_PUBLIC_ESCROW_ADDRESS: HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM
       NEXT_PUBLIC_USDC_ASA_ID: '10458941'
       NEXT_PUBLIC_ALGORAND_ALGOD_SERVER: https://testnet-api.algonode.cloud

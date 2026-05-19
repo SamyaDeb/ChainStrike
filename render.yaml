@@ -1,0 +1,297 @@
+services:
+  # ─── Identity Service ─────────────────────────────────────────────────────
+  - type: web
+    name: chainstrike-identity
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx turbo run build --filter=@chainstrike/identity-service... &&
+      cd services/identity &&
+      DATABASE_URL="${IDENTITY_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+    startCommand: node services/identity/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: IDENTITY_SERVICE_PORT
+        value: 10000
+      - key: IDENTITY_DATABASE_URL
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=identity
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INTERNAL_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: ALGORAND_NETWORK
+        value: testnet
+      - key: ALGORAND_ALGOD_SERVER
+        value: https://testnet-api.algonode.cloud
+      - key: ALGORAND_ALGOD_PORT
+        value: 443
+      - key: ALGORAND_ALGOD_TOKEN
+        value: ""
+      - key: ALGORAND_INDEXER_SERVER
+        value: https://testnet-idx.algonode.cloud
+      - key: ALGORAND_INDEXER_PORT
+        value: 443
+      - key: ADMIN_WALLET_ADDRESS
+        value: HMPG7YLTESN4FQXIGCAHQOXDEIDUIFBOINJDGQ7WUFBTYMOIKDIN6CITPM
+      - key: SUMSUB_APP_TOKEN
+        value: TESTNET_PLACEHOLDER
+      - key: SUMSUB_SECRET_KEY
+        value: TESTNET_PLACEHOLDER
+      - key: SUMSUB_BASE_URL
+        value: https://api.sumsub.com
+      - key: KAFKA_ENABLED
+        value: false
+
+  # ─── Asset Service ────────────────────────────────────────────────────────
+  - type: web
+    name: chainstrike-asset
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx turbo run build --filter=@chainstrike/asset-service... &&
+      cd services/asset &&
+      DATABASE_URL="${ASSET_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+    startCommand: node services/asset/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ASSET_SERVICE_PORT
+        value: 10000
+      - key: ASSET_DATABASE_URL
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=asset
+      - key: JWT_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: INTERNAL_SECRET
+      - key: IDENTITY_SERVICE_URL
+        value: https://chainstrike-identity.onrender.com
+      - key: USDC_ASSET_ID
+        value: 10458941
+      - key: ALGORAND_NETWORK
+        value: testnet
+      - key: ALGORAND_ALGOD_SERVER
+        value: https://testnet-api.algonode.cloud
+      - key: ALGORAND_ALGOD_PORT
+        value: 443
+      - key: ALGORAND_ALGOD_TOKEN
+        value: ""
+      - key: ALGORAND_INDEXER_SERVER
+        value: https://testnet-idx.algonode.cloud
+      - key: ALGORAND_INDEXER_PORT
+        value: 443
+      - key: ALGORAND_ADMIN_MNEMONIC
+        value: crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss
+      - key: WHITELIST_REGISTRY_APP_ID
+        value: 762550520
+      - key: ESCROW_CONTRACT_APP_ID
+        value: 762585096
+      - key: AWS_REGION
+        value: us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        value: TESTNET_PLACEHOLDER
+      - key: AWS_SECRET_ACCESS_KEY
+        value: TESTNET_PLACEHOLDER
+      - key: AWS_S3_BUCKET_DOCUMENTS
+        value: chainstrike-documents-testnet
+      - key: AWS_S3_SKIP_UPLOAD
+        value: true
+      - key: KAFKA_ENABLED
+        value: false
+
+  # ─── Compliance Service ───────────────────────────────────────────────────
+  - type: web
+    name: chainstrike-compliance
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx turbo run build --filter=@chainstrike/compliance-service... &&
+      cd services/compliance &&
+      DATABASE_URL="${COMPLIANCE_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+    startCommand: node services/compliance/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COMPLIANCE_SERVICE_PORT
+        value: 10000
+      - key: COMPLIANCE_DATABASE_URL
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=compliance
+      - key: JWT_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: INTERNAL_SECRET
+      - key: IDENTITY_SERVICE_URL
+        value: https://chainstrike-identity.onrender.com
+      - key: ASSET_SERVICE_URL
+        value: https://chainstrike-asset.onrender.com
+      - key: ALGORAND_NETWORK
+        value: testnet
+      - key: ALGORAND_ALGOD_SERVER
+        value: https://testnet-api.algonode.cloud
+      - key: ALGORAND_ALGOD_PORT
+        value: 443
+      - key: ALGORAND_ALGOD_TOKEN
+        value: ""
+      - key: ALGORAND_COMPLIANCE_MNEMONIC
+        value: crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss
+      - key: WHITELIST_REGISTRY_APP_ID
+        value: 762550520
+      - key: TRANSFER_RESTRICTION_APP_ID
+        value: 762550538
+      - key: CHAINALYSIS_API_KEY
+        value: TESTNET_PLACEHOLDER
+      - key: CHAINALYSIS_API_URL
+        value: https://api.chainalysis.com
+      - key: KAFKA_ENABLED
+        value: false
+
+  # ─── Settlement Service ───────────────────────────────────────────────────
+  - type: web
+    name: chainstrike-settlement
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx turbo run build --filter=@chainstrike/settlement-service... &&
+      cd services/settlement &&
+      DATABASE_URL="${SETTLEMENT_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+    startCommand: node services/settlement/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SETTLEMENT_PORT
+        value: 10000
+      - key: SETTLEMENT_DATABASE_URL
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=settlement
+      - key: JWT_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: INTERNAL_SECRET
+      - key: IDENTITY_SERVICE_URL
+        value: https://chainstrike-identity.onrender.com
+      - key: COMPLIANCE_SERVICE_URL
+        value: https://chainstrike-compliance.onrender.com
+      - key: ALGORAND_NETWORK
+        value: testnet
+      - key: ALGORAND_ALGOD_SERVER
+        value: https://testnet-api.algonode.cloud
+      - key: ALGORAND_ALGOD_PORT
+        value: 443
+      - key: ALGORAND_ALGOD_TOKEN
+        value: ""
+      - key: SETTLEMENT_MNEMONIC
+        value: crack scout prefer purchase seat fever tilt tornado knee ridge twice pulp man card stereo worry come disease thunder crash liberty toss leader abstract toss
+      - key: ESCROW_CONTRACT_APP_ID
+        value: 762585096
+      - key: USDC_ASSET_ID
+        value: 10458941
+      - key: KAFKA_ENABLED
+        value: false
+
+  # ─── Notification Service ─────────────────────────────────────────────────
+  - type: web
+    name: chainstrike-notification
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx turbo run build --filter=@chainstrike/notification-service... &&
+      cd services/notification &&
+      DATABASE_URL="${NOTIFICATION_DATABASE_URL}" npx prisma migrate deploy --schema=prisma/schema.prisma
+    startCommand: node services/notification/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NOTIFICATION_PORT
+        value: 10000
+      - key: NOTIFICATION_DATABASE_URL
+        value: postgresql://chainstrike_user:YGekQ8oluuRVGNZCJL62J0EX4Le3DlOW@dpg-d86atn0jo89c738rkte0-a.oregon-postgres.render.com:5432/chainstrike?schema=notification
+      - key: JWT_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: INTERNAL_SECRET
+      - key: SENDGRID_API_KEY
+        value: TESTNET_PLACEHOLDER
+      - key: SENDGRID_FROM_EMAIL
+        value: noreply@chainstrike.io
+      - key: SENDGRID_FROM_NAME
+        value: ChainStrike
+      - key: KAFKA_ENABLED
+        value: false
+
+  # ─── API Gateway (entry point for frontend) ───────────────────────────────
+  - type: web
+    name: chainstrike-gateway
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm ci && npx turbo run build --filter=@chainstrike/api-gateway...
+    startCommand: node apps/api-gateway/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GATEWAY_PORT
+        value: 10000
+      - key: JWT_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SECRET
+        fromService:
+          name: chainstrike-identity
+          type: web
+          envVarKey: INTERNAL_SECRET
+      - key: IDENTITY_SERVICE_URL
+        value: https://chainstrike-identity.onrender.com
+      - key: ASSET_SERVICE_URL
+        value: https://chainstrike-asset.onrender.com
+      - key: COMPLIANCE_SERVICE_URL
+        value: https://chainstrike-compliance.onrender.com
+      - key: SETTLEMENT_SERVICE_URL
+        value: https://chainstrike-settlement.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://chainstrike.vercel.app,http://localhost:3000
