@@ -2,9 +2,6 @@
 
 <div align="center">
 
-
-https://github.com/user-attachments/assets/70804800-0f3b-4693-8d91-179c4b02ac68
-
 # ChainStrike
 
 ### Institutional RWA Tokenization & AMM Trading on Algorand
