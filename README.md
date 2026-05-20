@@ -2,6 +2,9 @@
 
 <div align="center">
 
+
+https://github.com/user-attachments/assets/70804800-0f3b-4693-8d91-179c4b02ac68
+
 # ChainStrike
 
 ### Institutional RWA Tokenization & AMM Trading on Algorand
@@ -26,9 +29,9 @@ Demo Video Link : https://youtu.be/A1dudk5LXZg?si=ThZbcD6EuVBJFigV
 
 ## Overview
 
-ChainStrike is a production-grade platform for tokenizing real-world assets — gold, real estate, corporate bonds, private credit — as Algorand Standard Assets (ASAs) and listing them on Tinyman V2 AMM pools with institutional-grade compliance built in.
+ChainStrike is a production grade platform for tokenizing real-world assets gold, real estate, corporate bonds, private credit as Algorand Standard Assets (ASAs) and listing them on Tinyman V2 AMM pools with institutional grade compliance built in.
 
-Every asset goes through a multi-step KYB verification and admin approval workflow before an ASA is deployed on-chain. Compliance is enforced at the smart contract level via a whitelist registry — not just in the application layer. Investors trade directly from their wallets with no custodian and no order book.
+Every asset goes through a multi-step KYB verification and admin approval workflow before an ASA is deployed on-chain. Compliance is enforced at the smart contract level via a whitelist registry not just in the application layer. Investors trade directly from their wallets with no custodian and no order book.
 
 **Core properties:**
 - Non-custodial — investors swap directly on-chain via Tinyman SDK
@@ -62,8 +65,8 @@ Register & KYC → Connect Pera/Defly Wallet → Get Whitelisted
 ```
 
 1. Register, complete KYC, and connect an Algorand wallet (Pera or Defly)
-2. Admin whitelists the wallet via the on-chain compliance registry
-3. Swap USDC ↔ RWA tokens directly on-chain — no ChainStrike servers involved in the swap
+2. Admin whitelists the wallet via the on chain compliance registry
+3. Swap USDC ↔ RWA tokens directly on-chain, no ChainStrike servers involved in the swap
 4. Add single-asset USDC liquidity, receive LP tokens, earn 0.3% on every swap
 
 ---
