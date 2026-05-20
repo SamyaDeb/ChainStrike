@@ -16,9 +16,9 @@
 
 ---
 
-Social Link : x.com/ChainStrikeALGO
+Social Link : https://x.com/ChainStrikeALGO
 
-Live Link : chainstrike.vercel.app
+Live Link : https://chainstrike.vercel.app
 
 Demo Video Link : https://youtu.be/A1dudk5LXZg?si=ThZbcD6EuVBJFigV
 
