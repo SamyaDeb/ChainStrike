@@ -213,27 +213,6 @@ npm run dev
 
 ---
 
-## End-to-End Test Suite
-
-The `scripts/e2e/` directory contains a step-by-step automated flow against live services.
-
-```bash
-# Full suite (requires all services running + funded admin wallet)
-npm run e2e
-
-# Individual steps
-npm run e2e:health       # 00 — verify all services are reachable
-npm run e2e:issuer       # 01 — register issuer, submit asset application
-npm run e2e:admin        # 02 — admin approval flow, ASA deployment
-npm run e2e:distribute   # 03 — distribute tokens, seed issuer wallet
-npm run e2e:activate     # 04 — activate market, seed Tinyman V2 pool
-npm run e2e:buy          # 05 — verify pool reserves + investor readiness
-npm run e2e:settle       # 06 — price history snapshot check
-npm run e2e:frontend     # 07 — validate all frontend-facing API endpoints
-```
-
----
-
 ## Environment Variables
 
 Full reference is in `.env.example`. Critical variables:
